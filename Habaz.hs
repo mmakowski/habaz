@@ -1,7 +1,6 @@
 module Main where
 import Graphics.UI.WX
 
-
 startWidth, startHeight :: Int
 startWidth = 400
 startHeight = 300
