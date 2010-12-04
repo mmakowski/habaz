@@ -17,7 +17,7 @@ connect :: HostName             -- ^ The host to connect to
         -> String               -- ^ Port number
         -> IO Connection        -- ^ The opened connnection
 connect hostname port =
-  do addrinfos <- getAddrInfo Nothing (Just hostname) (Just port)
+  do addrinfos <- withSocketsDo $ getAddrInfo Nothing (Just hostname) (Just port)
      let serveraddr = head addrinfos
      sock <- socket (addrFamily serveraddr) Stream defaultProtocol
      setSocketOption sock KeepAlive 1
@@ -32,17 +32,6 @@ send conn cmd =
   do hPutStrLn conn cmd
      hFlush conn
      return conn
-
-{--
-syslog :: SyslogHandle -> Facility -> Priority -> String -> IO ()
-syslog syslogh fac pri msg =
-    do hPutStrLn  sendmsg
-       -- Make sure that we send data immediately
-       hFlush (slHandle syslogh)
-    where code = makeCode fac pri
-          sendmsg = "<" ++ show code ++ ">" ++ (slProgram syslogh) ++
-                    ": " ++ msg
---}
 
 disconnect :: Connection -> IO ()
 disconnect conn = hClose conn
