@@ -17,4 +17,5 @@ habazWindow =
 paintBoard :: DC a -> Rect -> IO ()
 paintBoard dc viewArea = 
   do set dc [brushColor := red, brushKind := BrushSolid]
-     polygon dc [(Point 0 0), (Point 0 20), (Point 50 10)] []
+     polygon dc [(Point 0 0), (Point 20 0), (Point 10 100)] []
+
