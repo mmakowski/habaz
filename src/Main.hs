@@ -1,4 +1,5 @@
 module Main where
+import FIBSClient
 import Graphics.UI.WX
 
 startWidth, startHeight :: Int

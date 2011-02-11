@@ -6,11 +6,15 @@ Building
 
 1. Set up Haskell Platform or ghc+cabal 
 2. install wxHaskell(http://haskell.org/haskellwiki/WxHaskell/Building).
-2. run `cabal build`
+4. run `cabal build`
 
 Testing
 -------
 
+*Automated tests*: 
+1. `cabal install hstest`
+2. `runghc Setup.hs test`
 TODO: proper unit testing
+TODO: why `cabal test` doesn't do anything?
 
-*FIBSClient*: open in `ghci` and run `test` function
+*Interactive testing*: load a module in `ghci` and run functions from the console
