@@ -3,8 +3,8 @@ import Char
 import Control.Monad
 import Data.Bits
 import Data.List
-import Network.Socket hiding (connect)
-import qualified Network.Socket (connect)
+import Network.Socket hiding (connect, send)
+import qualified Network.Socket (connect, send)
 import Network.BSD
 import System.IO
 
@@ -40,14 +40,17 @@ disconnect conn = hClose conn
 
 test = 
   do conn <- connect defaultFibsHost defaultFibsPort
-     readUntil '&' conn
+     readUntil "login:" conn
+     send conn "guest\n"
+     readUntil "!!!" conn
+     send conn "bye\n"
      return $ disconnect conn
 
--- TODO: termStr should be a string; check if termStr is matched as the character are read
 readUntil termStr conn = liftM reverse $ loop []
   where
+    rTermStr = reverse termStr
     loop acc = do
-      input <- hGetChar conn --fibsGetLine conn
-      putStr $ [input] ++ ":" ++ (show $ Char.ord input) ++ " "
-      (if input /= termStr then loop else return) (input:acc)
+      input <- hGetChar conn
+      putStr $ [input]
+      (if isPrefixOf rTermStr (input:acc) then return else loop) (input:acc)
       
