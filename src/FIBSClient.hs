@@ -1,5 +1,4 @@
 module FIBSClient where 
-import Char
 import Control.Monad
 import Data.Bits
 import Data.List
@@ -38,11 +37,12 @@ send conn cmd =
 disconnect :: Connection -> IO ()
 disconnect conn = hClose conn
 
+readUntil :: String -> Connection -> IO String
 readUntil termStr conn = liftM reverse $ loop []
   where
     rTermStr = reverse termStr
     loop acc = do
       input <- hGetChar conn
-      putStr $ [input]
+      -- putStr $ [input]
       (if isPrefixOf rTermStr (input:acc) then return else loop) (input:acc)
       

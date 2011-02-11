@@ -7,6 +7,6 @@ Synopsis:       A FIBS client
 Build-Type:     Simple
 
 Executable habaz
-  Build-Depends:  base, haskell98, network, wx
+  Build-Depends:  base, network, wx
   Main-Is:        Main.hs
   Hs-Source-Dirs: src
