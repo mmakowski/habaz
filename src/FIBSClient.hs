@@ -7,6 +7,7 @@ import Network.Socket hiding (Connected, connect, send)
 import qualified Network.Socket (connect)
 import Network.BSD
 import System.IO
+import System.Locale
 
 
 type Command = String
@@ -15,10 +16,13 @@ data Connection = Disconnected
                 | Connected Handle
                   
 data LoginStatus = Success
-                 | Failure String
+                 | Failure
                    
-data CLIPInputLine = FailedLogin
+data CLIPInputLine = ParseFailure String
+                   | FailedLogin
                    | Welcome String UTCTime String -- username, last login, last host
+                   deriving (Eq, Show)
+
 
 defaultFibsHost = "fibs.com"
 defaultFibsPort = "4321"
@@ -47,9 +51,11 @@ send conn@(Connected handle) cmd =
 parseLine :: String -> CLIPInputLine
 parseLine = parseWords . words 
   where
+    parseUTCTime = parseTime defaultTimeLocale "%s"
     parseWords ("login:":_) = FailedLogin
-    parseWords ["1", username, millisString, ip] = 
-      Welcome username (UTCTime (ModifiedJulianDay 1) (secondsToDiffTime 1)) ip -- TODO: parse time
+    parseWords ["1", username, millisString, ip] = case parseUTCTime millisString of
+      Just(time) -> Welcome username time ip
+      Nothing -> ParseFailure $ "unable to parse " ++ millisString ++ " as time"
     -- TODO: other cases
 
 
@@ -78,6 +84,6 @@ login :: Connection     -- ^ An open conection
 login conn@(Connected _) clientname username password = 
   do readUntil "login:" conn
      send conn $ "login " ++ clientname ++ " " ++ clipVersion ++ " " ++ username ++ " " ++ password
-     readUntil"2 " conn
-     return $ Failure "not implemented yet"
+     readUntil "2 " conn
+     return $ Failure
      

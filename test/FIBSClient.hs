@@ -1,9 +1,17 @@
 import Data.List
+import Data.Maybe
+import Data.Time
 import FIBSClient
+import System.Locale
 import Test.HUnit
  
 testAccount = "habaztest"
 testPassword = "habaztest"
+
+test_parseLine_failedLoginParsedCorrectly = assertEqual "failed login" FailedLogin $ parseLine "login:"
+test_parseLine_welcomeParsedCorrectly = assertEqual "welcome message"
+                                          (Welcome "username" (fromJust $ parseTime defaultTimeLocale "%s" "1041253132") "1.2.3.4") 
+                                          (parseLine "1 username 1041253132 1.2.3.4")
 
 -- Note: this test will normally be disabled because there is no way to remove 
 -- a test account from FIBS once it was created. If other tests fail because
@@ -15,9 +23,11 @@ test_createAccount =
      disconnect conn
      return result
   where
-    tryToCreateAccount (Failure "") = assertBool "TODO" False
-    tryToCreateAccount (Failure msg) = assertFailure $ "unexpected problems when testing for account existence: " ++ msg
-    tryToCreateAccount Success = assertFailure $ testAccount ++ " is already a valid FIBS account, can't test creation"
+    tryToCreateAccount Failure = assertBool "TODO" False
+    tryToCreateAccount Success = 
+      do
+        -- TODO: logout
+        assertFailure $ testAccount ++ " is already a valid FIBS account, can't test creation"
     
 {-
 test_accountCreation = 
