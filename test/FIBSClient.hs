@@ -10,8 +10,10 @@ testPassword = "habaztest"
 -- the test account does not exist then enable this test to re-create the account
 test_createAccount = 
   do conn <- connect defaultFibsHost defaultFibsPort
-     loginStatus <- login conn testAccount testPassword
-     return $ tryToCreateAccount loginStatus
+     loginStatus <- login conn "habaz-test" testAccount testPassword
+     result <- tryToCreateAccount loginStatus
+     disconnect conn
+     return result
   where
     tryToCreateAccount (Failure "") = assertBool "TODO" False
     tryToCreateAccount (Failure msg) = assertFailure $ "unexpected problems when testing for account existence: " ++ msg
