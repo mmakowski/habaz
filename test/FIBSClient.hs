@@ -5,7 +5,7 @@ import FIBSClient
 import System.Locale
 import Test.HUnit
  
-testAccount = "habaztest"
+testAccount = "habaztest_a"
 testPassword = "habaztest"
 
 test_parseLine_failedLoginParsedCorrectly = assertEqual "failed login" FailedLogin $ parseLine "login:"
@@ -19,14 +19,15 @@ test_parseLine_welcomeParsedCorrectly = assertEqual "welcome message"
 test_createAccount = 
   do conn <- connect defaultFibsHost defaultFibsPort
      loginStatus <- login conn "habaz-test" testAccount testPassword
-     result <- tryToCreateAccount loginStatus
+     result <- createTestAccount loginStatus conn
      disconnect conn
      return result
   where
-    tryToCreateAccount Failure = assertBool "TODO" False
-    tryToCreateAccount Success = 
+    createTestAccount (Failure "invalid login details") _ = assertBool "TODO" False
+    createTestAccount (Failure reason) _ = assertFailure reason
+    createTestAccount Success conn = 
       do
-        -- TODO: logout
+        logout conn
         assertFailure $ testAccount ++ " is already a valid FIBS account, can't test creation"
     
 {-

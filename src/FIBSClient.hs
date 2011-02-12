@@ -12,11 +12,12 @@ import System.Locale
 
 type Command = String
 
+-- TODO: manage connection state more thoroughly
 data Connection = Disconnected
                 | Connected Handle
                   
 data LoginStatus = Success
-                 | Failure
+                 | Failure String
                    
 data CLIPInputLine = ParseFailure String
                    | FailedLogin
@@ -30,14 +31,16 @@ clipVersion = "1008"
 
 -- communication primitives
 
-readUntil :: String -> Connection -> IO String
-readUntil termStr (Connected conn) = liftM reverse $ loop []
+readUntil :: [String] -> Connection -> IO String
+readUntil termStrs (Connected conn) = liftM reverse $ loop []
   where
-    rTermStr = reverse termStr
+    rTermStrs = map reverse termStrs
+    isTerminated rstr (rTermStr:rTermStrs) = isPrefixOf rTermStr rstr || isTerminated rstr rTermStrs
+    isTerminated _ [] = False
     loop acc = do
       input <- hGetChar conn
       putStr $ [input]
-      (if isPrefixOf rTermStr (input:acc) then return else loop) (input:acc)
+      (if isTerminated (input:acc) rTermStrs then return else loop) (input:acc)
       
 send :: Connection -> Command -> IO Connection
 send conn@(Connected handle) cmd =
@@ -57,7 +60,7 @@ parseLine = parseWords . words
       Just(time) -> Welcome username time ip
       Nothing -> ParseFailure $ "unable to parse " ++ millisString ++ " as time"
     -- TODO: other cases
-
+    parseWords words = ParseFailure $ "unable to parse: " ++ (unwords words)
 
 -- interface functions
 
@@ -76,14 +79,24 @@ connect hostname port =
 disconnect :: Connection -> IO ()
 disconnect (Connected conn) = hClose conn
 
-login :: Connection     -- ^ An open conection
+login :: Connection     -- ^ An open connection
       -> String         -- ^ Client name
       -> String         -- ^ User name
       -> String         -- ^ Password
       -> IO LoginStatus -- ^ The status of loggin attempt
 login conn@(Connected _) clientname username password = 
-  do readUntil "login:" conn
+  do readUntil ["login:"] conn
      send conn $ "login " ++ clientname ++ " " ++ clipVersion ++ " " ++ username ++ " " ++ password
-     readUntil "2 " conn
-     return $ Failure
+     readUntil ["\n"] conn
+     line <- readUntil ["\n", "login:"] conn
+     return $ case parseLine line of
+       FailedLogin         -> Failure "invalid login details"
+       ParseFailure reason -> Failure reason
+       Welcome _ _ _       -> Success
      
+logout :: Connection    -- ^ An open connection
+       -> IO ()
+logout conn@(Connected _) = 
+  do send conn $ "bye"
+     return ()
+    
