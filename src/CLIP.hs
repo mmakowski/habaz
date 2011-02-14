@@ -40,10 +40,10 @@ instance Applicative ParseResult where
   
 -- message parsing
 
-parseMessages :: String -> ParseResult [CLIPMessage]
+parseMessages :: String -> [ParseResult CLIPMessage]
 parseMessages str = 
   let (msg, rest) = parseMessage str 
-  in (:) <$> msg <*> parseMessages rest
+  in (msg : parseMessages rest)
 
 parseMessage :: String -> (ParseResult CLIPMessage, String)
 parseMessage str = 
