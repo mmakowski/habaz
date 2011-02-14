@@ -1,22 +1,14 @@
 import Data.List
-import Data.Maybe
-import Data.Time
 import FIBSClient
-import System.Locale
 import Test.HUnit
  
 testAccount = "habaztest_a"
 testPassword = "habaztest"
 
-test_parseLine_failedLoginParsedCorrectly = assertEqual "failed login" FailedLogin $ parseLine "login:"
-test_parseLine_welcomeParsedCorrectly = assertEqual "welcome message"
-                                          (Welcome "username" (fromJust $ parseTime defaultTimeLocale "%s" "1041253132") "1.2.3.4") 
-                                          (parseLine "1 username 1041253132 1.2.3.4")
-
 -- Note: this test will normally be disabled because there is no way to remove 
 -- a test account from FIBS once it was created. If other tests fail because
 -- the test account does not exist then enable this test to re-create the account
-test_createAccount = 
+atest_createAccount = 
   do conn <- connect defaultFibsHost defaultFibsPort
      loginStatus <- login conn "habaz-test" testAccount testPassword
      result <- createTestAccount loginStatus conn

@@ -1,14 +1,13 @@
 module FIBSClient where 
 import Control.Applicative
 import Control.Monad
+import CLIP
 import Data.Bits
 import Data.List
-import Data.Time
 import Network.Socket hiding (Connected, connect, send)
 import qualified Network.Socket (connect)
 import Network.BSD
 import System.IO
-import System.Locale
 
 
 type Command = String
@@ -20,10 +19,6 @@ data Connection = Disconnected
 data LoginStatus = Success
                  | Failure String
                    
-data CLIPMessage = ParseFailure String
-                   | FailedLogin
-                   | Welcome String UTCTime String -- username, last login, last host
-                   deriving (Eq, Show)
 
 
 defaultFibsHost = "fibs.com"
@@ -53,19 +48,6 @@ send conn@(Connected handle) cmd =
      return conn
 
 
--- message parsing
-     
-parseLine :: String -> CLIPMessage
-parseLine = parseWords . words 
-  where
-    parseUTCTime = parseTime defaultTimeLocale "%s"
-    parseWords ("login:":_) = FailedLogin
-    parseWords ["1", username, millisString, ip] = case parseUTCTime millisString of
-      Just(time) -> Welcome username time ip
-      Nothing -> ParseFailure $ "unable to parse " ++ millisString ++ " as time"
-    -- TODO: other cases
-    parseWords words = ParseFailure $ "unable to parse: " ++ (unwords words)
-
 -- interface functions
 
 connect :: HostName             -- ^ The host to connect to
@@ -93,7 +75,7 @@ login conn@(Connected _) clientname username password =
      send conn $ "login " ++ clientname ++ " " ++ clipVersion ++ " " ++ username ++ " " ++ password
      readUntil ["\n"] conn
      line <- readUntil ["\n", "login:"] conn
-     return $ case parseLine line of
+     return $ case fst (parseMessage line) of
        FailedLogin         -> Failure "invalid login details"
        ParseFailure reason -> Failure reason
        Welcome _ _ _       -> Success
@@ -108,31 +90,12 @@ logout conn@(Connected _) =
 -- play in progress:
 
 readMessages :: Connection -> IO [CLIPMessage]
---readMessages conn@(Connected _) = (:) <$> parseLine <$> readLine conn <*> readMessages conn
-{-
-readMessages conn@(Connected _) = 
+readMessages (Connected h) = 
   do
-    lineStr <- readLine conn
-    rest <- readMessages conn
-    return (parseLine lineStr : rest)
--}
+    msgStr <- hGetContents h -- lazy!
+    return $ parseMessages msgStr
 
-readMessages conn@(Connected h) = 
-  do
-    msgStr <- hGetContents h
-    return $ parseLines msgStr
-  where
-    parseLines str = 
-      let (first, rest) = getFirstLineStr str in (parseLine first : parseLines rest)
-    getFirstLineStr str = 
-      let (revFirst, rest) = loop [] str in (reverse revFirst, rest)
-    rTermStrs = map reverse ["\n", "login:"]
-    isTerminated rstr (rTermStr:rTermStrs) = isPrefixOf rTermStr rstr || isTerminated rstr rTermStrs
-    isTerminated _ [] = False
-    loop acc [] = (acc, [])
-    loop acc (h:t) = 
-      if isTerminated (h:acc) rTermStrs then ((h:acc), t) else loop (h:acc) t
-    
+
     
 test = 
   do conn <- connect defaultFibsHost defaultFibsPort
