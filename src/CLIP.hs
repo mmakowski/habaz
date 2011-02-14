@@ -1,65 +1,94 @@
-module CLIP where
+module CLIP(
+  CLIPMessage (..), 
+  ParseResult (Success, Failure),
+  parseMessage,
+  parseMessages
+  ) where
 import Control.Applicative
 import Data.List
 import Data.Time
 import System.Locale
 
 data CLIPMessage 
-                 = ParseFailure String -- ^ error message
-                 | FailedLogin
-                 -- | Welcome: username, last login, last host
-                 | Welcome String UTCTime String
-                 -- | OwnInfo: username, allowpip, autoboard, autodouble, automove
-                 | OwnInfo String     -- username
-                           Bool       -- allowpip
-                           Bool       -- autoboard
-                           Bool       -- autodouble
-                           Bool       -- automove
-                   deriving (Eq, Show)
+     = FailedLogin
+     | Welcome { name :: String
+               , lastLogin :: UTCTime
+               , lastHost :: String 
+               }
+     | OwnInfo { name :: String 
+               , allowPip :: Bool 
+               , autoBoard :: Bool 
+               , autoDouble :: Bool 
+               , autoMove :: Bool       
+               }
+     deriving (Eq, Show)
 
+data ParseResult a 
+     = Success a
+     | Failure String
+     deriving (Eq, Show)
 
+instance Functor ParseResult where 
+  fmap f (Failure msg) = Failure msg
+  fmap f (Success a) = Success (f a)
+    
+instance Applicative ParseResult where
+  pure = Success
+  Failure msg1 <*> Failure msg2 = Failure $ msg1 ++ "; " ++ msg2
+  Failure msg <*> _ = Failure msg
+  Success f <*> sth = fmap f sth
+  
 -- message parsing
+
+parseMessages :: String -> ParseResult [CLIPMessage]
+parseMessages str = 
+  let (msg, rest) = parseMessage str 
+  in (:) <$> msg <*> parseMessages rest
+
+parseMessage :: String -> (ParseResult CLIPMessage, String)
+parseMessage str = 
+  let (first, rest) = firstLine str 
+  in parseLine (words first) rest
+  where
+    firstLine str = 
+      let (revFirst, rest) = loop [] str in (reverse revFirst, rest)
+    rTermStrs = map reverse lineTerminators
+    isTerminatedByOneOf rstr (rTermStr:rTermStrs) = 
+      isPrefixOf rTermStr rstr || rstr `isTerminatedByOneOf` rTermStrs
+    isTerminatedByOneOf _ [] = False
+    loop acc [] = (acc, [])
+    loop acc (h:t) = 
+      let currStr = (h:acc) 
+      in if currStr `isTerminatedByOneOf` rTermStrs then (currStr, t) else loop currStr t
+
+parseLine :: [String] -> String -> (ParseResult CLIPMessage, String)
+-- failed login
+parseLine ("login:" : _) rest = (Success FailedLogin, rest)
+-- CLIP Welcome
+parseLine ["1", username, millisString, ip] rest = 
+  (Welcome <$> pure username <*> parseUTCTime millisString <*> pure ip, rest)
+-- CLIP Own Info
+parseLine ["2", name, allowpip, autoboard, autodouble, automove, away, bell, crawford, 
+           double, experience, greedy, moreboards, moves, notify, rating, ratings, ready, 
+           redoubles, report, silent, timezone] rest = 
+  (OwnInfo <$> pure name <*> 
+               parseBool allowpip <*> 
+               parseBool autoboard <*> 
+               parseBool autodouble <*>
+               parseBool automove,
+   rest)
+-- TODO: other cases
+parseLine words rest = (Failure $ "unable to parse: " ++ (unwords words), rest)
 
 lineTerminators = ["\n", "login:"]
 
-parseMessage str = 
-  let (first, rest) = getFirstLine str 
-  in parseLine (words first) rest
-  where
-    getFirstLine str = 
-      let (revFirst, rest) = loop [] str in (reverse revFirst, rest)
-      where
-        rTermStrs = map reverse lineTerminators
-        isTerminated rstr (rTermStr:rTermStrs) = isPrefixOf rTermStr rstr || isTerminated rstr rTermStrs
-        isTerminated _ [] = False
-        loop acc [] = (acc, [])
-        loop acc (h:t) = 
-          let currStr = (h:acc) 
-          in if isTerminated currStr rTermStrs then (currStr, t) else loop currStr t
-    parseUTCTime = parseTime defaultTimeLocale "%s"
-    parseBool "1" = Just True
-    parseBool "0" = Just False
-    parseBool _ = Nothing
-    -- failed login
-    parseLine ("login:":_) rest = (FailedLogin, rest)
-    -- CLIP Welcome
-    parseLine ["1", username, millisString, ip] rest = case parseUTCTime millisString of
-      Just time -> (Welcome username time ip, rest)
-      Nothing -> (ParseFailure $ "unable to parse " ++ millisString ++ " as time", rest)
-    -- CLIP Own Info
-    parseLine w@["2", name, allowpip, autoboard, autodouble, automove, away, bell, crawford, 
-               double, experience, greedy, moreboards, moves, notify, rating, ratings, ready, 
-               redoubles, report, silent, timezone] rest = 
-      case OwnInfo <$> Just name <*> 
-                       parseBool allowpip <*> 
-                       parseBool autoboard <*> 
-                       parseBool autodouble <*>
-                       parseBool automove of
-        Just ownInfo -> (ownInfo, rest)
-        Nothing -> (ParseFailure $ "unable to parse " ++ (unwords w) ++ " as own info", rest)
-    -- TODO: other cases
-    parseLine words rest = (ParseFailure $ "unable to parse: " ++ (unwords words), rest)
+parseUTCTime :: String -> ParseResult UTCTime
+parseUTCTime str = case parseTime defaultTimeLocale "%s" str of
+  Just time -> Success time
+  Nothing -> Failure $ "unable to parse '" ++ str ++ "' as UTCTime"
 
-parseMessages str = 
-  let (msg, rest) = parseMessage str in (msg : parseMessages rest)
+parseBool :: String -> ParseResult Bool
+parseBool "1" = Success True
+parseBool "0" = Success False
+parseBool str = Failure $ "unable to parse '" ++ str ++ "' as Bool"
 

@@ -1,7 +1,8 @@
 module FIBSClient where 
 import Control.Applicative
 import Control.Monad
-import CLIP
+import CLIP hiding (ParseResult (..))
+import qualified CLIP as Parse (ParseResult (..))
 import Data.Bits
 import Data.List
 import Network.Socket hiding (Connected, connect, send)
@@ -76,9 +77,9 @@ login conn@(Connected _) clientname username password =
      readUntil ["\n"] conn
      line <- readUntil ["\n", "login:"] conn
      return $ case fst (parseMessage line) of
-       FailedLogin         -> Failure "invalid login details"
-       ParseFailure reason -> Failure reason
-       Welcome _ _ _       -> Success
+       Parse.Failure msg             -> Failure $ "parse error: " ++ msg
+       Parse.Success FailedLogin     -> Failure "invalid login details"
+       Parse.Success (Welcome _ _ _) -> Success
      
 logout :: Connection    -- ^ An open connection
        -> IO ()
@@ -93,10 +94,11 @@ readMessages :: Connection -> IO [CLIPMessage]
 readMessages (Connected h) = 
   do
     msgStr <- hGetContents h -- lazy!
-    return $ parseMessages msgStr
-
-
+    return $ case parseMessages msgStr of
+      Parse.Success msgs -> msgs
+      Parse.Failure reason -> [] -- TODO: report reason somehow
     
+
 test = 
   do conn <- connect defaultFibsHost defaultFibsPort
      login conn "Habaź" "habaztest_a" "habaztest"
