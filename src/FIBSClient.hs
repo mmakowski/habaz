@@ -1,4 +1,5 @@
 module FIBSClient where 
+import Control.Applicative
 import Control.Monad
 import Data.Bits
 import Data.List
@@ -19,7 +20,7 @@ data Connection = Disconnected
 data LoginStatus = Success
                  | Failure String
                    
-data CLIPInputLine = ParseFailure String
+data CLIPMessage = ParseFailure String
                    | FailedLogin
                    | Welcome String UTCTime String -- username, last login, last host
                    deriving (Eq, Show)
@@ -39,9 +40,12 @@ readUntil termStrs (Connected conn) = liftM reverse $ loop []
     isTerminated _ [] = False
     loop acc = do
       input <- hGetChar conn
-      putStr $ [input]
+      putStr $ if isTerminated (input:acc) rTermStrs then reverse (input:acc) else ""
       (if isTerminated (input:acc) rTermStrs then return else loop) (input:acc)
       
+readLine :: Connection -> IO String
+readLine = readUntil ["\n", "login:"] 
+
 send :: Connection -> Command -> IO Connection
 send conn@(Connected handle) cmd =
   do hPutStrLn handle cmd
@@ -51,7 +55,7 @@ send conn@(Connected handle) cmd =
 
 -- message parsing
      
-parseLine :: String -> CLIPInputLine
+parseLine :: String -> CLIPMessage
 parseLine = parseWords . words 
   where
     parseUTCTime = parseTime defaultTimeLocale "%s"
@@ -100,3 +104,39 @@ logout conn@(Connected _) =
   do send conn $ "bye"
      return ()
     
+     
+-- play in progress:
+
+readMessages :: Connection -> IO [CLIPMessage]
+--readMessages conn@(Connected _) = (:) <$> parseLine <$> readLine conn <*> readMessages conn
+{-
+readMessages conn@(Connected _) = 
+  do
+    lineStr <- readLine conn
+    rest <- readMessages conn
+    return (parseLine lineStr : rest)
+-}
+
+readMessages conn@(Connected h) = 
+  do
+    msgStr <- hGetContents h
+    return $ parseLines msgStr
+  where
+    parseLines str = 
+      let (first, rest) = getFirstLineStr str in (parseLine first : parseLines rest)
+    getFirstLineStr str = 
+      let (revFirst, rest) = loop [] str in (reverse revFirst, rest)
+    rTermStrs = map reverse ["\n", "login:"]
+    isTerminated rstr (rTermStr:rTermStrs) = isPrefixOf rTermStr rstr || isTerminated rstr rTermStrs
+    isTerminated _ [] = False
+    loop acc [] = (acc, [])
+    loop acc (h:t) = 
+      if isTerminated (h:acc) rTermStrs then ((h:acc), t) else loop (h:acc) t
+    
+    
+test = 
+  do conn <- connect defaultFibsHost defaultFibsPort
+     login conn "Habaź" "habaztest_a" "habaztest"
+     take 10 <$> readMessages conn >>= putStrLn . show
+     logout conn
+     disconnect conn
