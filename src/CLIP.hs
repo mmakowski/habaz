@@ -53,13 +53,10 @@ parseMessage str =
     firstLine str = 
       let (revFirst, rest) = loop [] str in (reverse revFirst, rest)
     rTermStrs = map reverse lineTerminators
-    isTerminatedByOneOf rstr (rTermStr:rTermStrs) = 
-      isPrefixOf rTermStr rstr || rstr `isTerminatedByOneOf` rTermStrs
-    isTerminatedByOneOf _ [] = False
     loop acc [] = (acc, [])
     loop acc (h:t) = 
       let currStr = (h:acc) 
-      in if currStr `isTerminatedByOneOf` rTermStrs then (currStr, t) else loop currStr t
+      in if rTermStrs `containsPrefixOf` currStr then (currStr, t) else loop currStr t
 
 parseLine :: [String] -> String -> (ParseResult CLIPMessage, String)
 -- failed login
@@ -79,6 +76,8 @@ parseLine ["2", name, allowpip, autoboard, autodouble, automove, away, bell, cra
    rest)
 -- TODO: other cases
 parseLine words rest = (Failure $ "unable to parse: " ++ (unwords words), rest)
+
+strs `containsPrefixOf` str = foldl (\b s -> b || s `isPrefixOf` str) False strs
 
 lineTerminators = ["\n", "login:"]
 
