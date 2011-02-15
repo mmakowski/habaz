@@ -33,6 +33,51 @@ test_whoInfoParsedCorrectly =
                            (PlayerInfo "anotherplayer" Nothing Nothing False False 1439.79 1262 410 (toUTCTime "1041251697") "somehost.com" Nothing Nothing)]), [])
               (parseMessage whoInfoMsg)
 
+test_loginParsedCorrectly =
+  assertEqual "CLIP Login"
+              (Success (Login "someplayer" "someplayer logs in."), [])
+              (parseMessage "7 someplayer someplayer logs in.")
+
+test_logoutParsedCorrectly = 
+  assertEqual "CLIP Logout"
+              (Success (Logout "someplayer" "someplayer drops connection."), [])
+              (parseMessage "8 someplayer someplayer drops connection.")
+
+test_messageParsedCorrectly = 
+  assertEqual "CLIP Message"
+              (Success (Message "someplayer" (toUTCTime "1041253132") "I'll log in at 10pm if you want to finish that game."), [])
+              (parseMessage "9 someplayer 1041253132 I'll log in at 10pm if you want to finish that game.")
+
+test_messageDeliveredParsedCorrectly = 
+  assertEqual "CLIP Message Delivered"
+              (Success (MessageDelivered "someplayer"), [])
+              (parseMessage "10 someplayer")
+              
+test_messageSavedParsedCorrectly = 
+  assertEqual "CLIP Message Saved"
+              (Success (MessageSaved "someplayer"), [])
+              (parseMessage "11 someplayer")
+              
+test_saysParsedCorrectly = 
+  assertEqual "CLIP Says"
+              (Success (Says "someplayer" "Do you want to play a game?"), [])
+              (parseMessage "12 someplayer Do you want to play a game?")
+
+test_shoutsParsedCorrectly = 
+  assertEqual "CLIP Shouts"
+              (Success (Shouts "someplayer" "Anybody for a 5 point match?"), [])
+              (parseMessage "13 someplayer Anybody for a 5 point match?")
+
+test_whispersParsedCorrectly = 
+  assertEqual "CLIP Whispers"
+              (Success (Whispers "someplayer" "I think he is using loaded dice  :-)"), [])
+              (parseMessage "14 someplayer I think he is using loaded dice  :-)")
+
+test_kibitzesParsedCorrectly = 
+  assertEqual "CLIP Kibitzes"
+              (Success (Kibitzes "someplayer" "G'Day and good luck from Hobart, Australia."), [])
+              (parseMessage "15 someplayer G'Day and good luck from Hobart, Australia.")
+
 test_parseMessagesIsLazy = 
   assertEqual "parseMessages is lazy" 
               [Success FailedLogin, Success FailedLogin]

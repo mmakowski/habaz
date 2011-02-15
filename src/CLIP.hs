@@ -63,6 +63,30 @@ data CLIPMessage
                }
      | MOTD String
      | WhoInfo [PlayerInfo]
+     | Login { name :: String
+             , message :: String
+             }
+     | Logout { name :: String
+              , message :: String
+              }
+     | Message { from :: String
+               , time :: UTCTime
+               , message :: String
+               }
+     | MessageDelivered { name :: String }
+     | MessageSaved { name :: String }
+     | Says { name :: String
+            , message :: String
+            }
+     | Shouts { name :: String
+              , message :: String
+              }
+     | Whispers { name :: String
+                , message :: String
+                }
+     | Kibitzes { name :: String
+                , message :: String
+                }
      deriving (Eq, Show)
 
 data ParseResult a 
@@ -145,6 +169,36 @@ parseLine line@("5" : _) rest =
       in parseWhoInfo (acc ++ [parsePlayerInfo line]) (words next) rest'
     lift [] = pure []
     lift (pr:prs) = (:) <$> pr <*> lift prs
+-- CLIP Login
+parseLine ("7" : (name : msg)) rest = 
+  (Success (Login name (unwords msg)), rest)
+-- CLIP Logout
+parseLine ("8" : (name : msg)) rest = 
+  (Success (Logout name (unwords msg)), rest)
+-- CLIP Message
+parseLine ("9" : (from : (time : msg))) rest =
+  (Message <$> pure from
+           <*> parseUTCTime time
+           <*> pure (unwords msg),
+   rest)
+-- CLIP Message Delivered
+parseLine ["10", name] rest = 
+  (Success (MessageDelivered name), rest)
+-- CLIP Message Saved
+parseLine ["11", name] rest =
+  (Success (MessageSaved name), rest)
+-- CLIP Says
+parseLine ("12":(name:msg)) rest =
+  (Success (Says name (unwords msg)), rest)
+-- CLIP Shouts
+parseLine ("13":(name:msg)) rest =
+  (Success (Shouts name (unwords msg)), rest)
+-- CLIP Whispers
+parseLine ("14":(name:msg)) rest =
+  (Success (Whispers name (unwords msg)), rest)
+-- CLIP Kibitzes
+parseLine ("15":(name:msg)) rest =
+  (Success (Kibitzes name (unwords msg)), rest)
 -- TODO: other cases
 parseLine words rest = (Failure $ "unable to parse: " ++ (unwords words), rest)
 

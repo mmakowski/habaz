@@ -99,6 +99,6 @@ readMessages (Connected h) =
 test = 
   do conn <- connect defaultFibsHost defaultFibsPort
      login conn "Habaź" "habaztest_a" "habaztest"
-     take 10 <$> readMessages conn >>= putStrLn . show
+     take 30 <$> readMessages conn >>= putStrLn . show
      logout conn
      disconnect conn
