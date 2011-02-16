@@ -76,7 +76,7 @@ login conn@(Connected _) clientname username password =
      send conn $ "login " ++ clientname ++ " " ++ clipVersion ++ " " ++ username ++ " " ++ password
      readUntil ["\n"] conn
      line <- readUntil ["\n", "login:"] conn
-     return $ case fst (parseMessage line) of
+     return $ case fst (parseCLIPMessage line) of
        CLIP.Failure msg             -> Failure $ "parse error: " ++ msg
        CLIP.Success FailedLogin     -> Failure "invalid login details"
        CLIP.Success (Welcome _ _ _) -> Success
@@ -94,7 +94,7 @@ readMessages :: Connection -> IO [CLIP.ParseResult CLIPMessage]
 readMessages (Connected h) = 
   do
     msgStr <- hGetContents h -- lazy!
-    return $ parseMessages msgStr
+    return $ parseCLIPMessages msgStr
 
 test = 
   do conn <- connect defaultFibsHost defaultFibsPort

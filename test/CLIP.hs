@@ -8,22 +8,22 @@ import Test.HUnit
 test_failedLoginParsedCorrectly = 
   assertEqual "failed login" 
               (Success FailedLogin, []) 
-              (parseMessage "login:")
+              (parseCLIPMessage "login:")
 
 test_welcomeParsedCorrectly = 
   assertEqual "CLIP Welcome"
               (Success (Welcome "username" (toUTCTime "1041253132") "1.2.3.4"), [])
-              (parseMessage "1 username 1041253132 1.2.3.4")
+              (parseCLIPMessage "1 username 1041253132 1.2.3.4\r\n")
 
 test_ownInfoParsedCorrectly = 
   assertEqual "CLIP Own Info"
               (Success (OwnInfo "myself" True True False False False False True True 2396 False True False True 3457.85 False False (LimitedTo 0) False False "Australia/Melbourne"), [])
-              (parseMessage "2 myself 1 1 0 0 0 0 1 1 2396 0 1 0 1 3457.85 0 0 0 0 0 Australia/Melbourne")
+              (parseCLIPMessage "2 myself 1 1 0 0 0 0 1 1 2396 0 1 0 1 3457.85 0 0 0 0 0 Australia/Melbourne\r\n")
 
 test_motdParsedCorrectly = 
   assertEqual "CLIP MOTD"
               (Success (MOTD motd), [])
-              (parseMessage $ "3\r\n" ++ motd ++ "4\r\n")
+              (parseCLIPMessage $ "3\r\n" ++ motd ++ "4\r\n")
 
 test_whoInfoParsedCorrectly = 
   assertEqual "CLIP Who Info"
@@ -31,57 +31,57 @@ test_whoInfoParsedCorrectly =
                            (PlayerInfo "mgnu_advanced" (Just "someplayer") Nothing True False 1912.15 827 8 (toUTCTime "1040515752") "192.168.143.5" (Just "3DFiBs") Nothing),
                            (PlayerInfo "someplayer" (Just "mgnu_advanced") Nothing False False 1418.61 23 1914 (toUTCTime "1041272421") "192.168.40.3" (Just "MacFIBS") (Just "someplayer@somewhere.com")),
                            (PlayerInfo "anotherplayer" Nothing Nothing False False 1439.79 1262 410 (toUTCTime "1041251697") "somehost.com" Nothing Nothing)]), [])
-              (parseMessage whoInfoMsg)
+              (parseCLIPMessage whoInfoMsg)
 
 test_loginParsedCorrectly =
   assertEqual "CLIP Login"
               (Success (Login "someplayer" "someplayer logs in."), [])
-              (parseMessage "7 someplayer someplayer logs in.")
+              (parseCLIPMessage "7 someplayer someplayer logs in.\r\n")
 
 test_logoutParsedCorrectly = 
   assertEqual "CLIP Logout"
               (Success (Logout "someplayer" "someplayer drops connection."), [])
-              (parseMessage "8 someplayer someplayer drops connection.")
+              (parseCLIPMessage "8 someplayer someplayer drops connection.\r\n")
 
 test_messageParsedCorrectly = 
   assertEqual "CLIP Message"
               (Success (Message "someplayer" (toUTCTime "1041253132") "I'll log in at 10pm if you want to finish that game."), [])
-              (parseMessage "9 someplayer 1041253132 I'll log in at 10pm if you want to finish that game.")
+              (parseCLIPMessage "9 someplayer 1041253132 I'll log in at 10pm if you want to finish that game.\r\n")
 
 test_messageDeliveredParsedCorrectly = 
   assertEqual "CLIP Message Delivered"
               (Success (MessageDelivered "someplayer"), [])
-              (parseMessage "10 someplayer")
+              (parseCLIPMessage "10 someplayer\r\n")
               
 test_messageSavedParsedCorrectly = 
   assertEqual "CLIP Message Saved"
               (Success (MessageSaved "someplayer"), [])
-              (parseMessage "11 someplayer")
+              (parseCLIPMessage "11 someplayer\r\n")
               
 test_saysParsedCorrectly = 
   assertEqual "CLIP Says"
               (Success (Says "someplayer" "Do you want to play a game?"), [])
-              (parseMessage "12 someplayer Do you want to play a game?")
+              (parseCLIPMessage "12 someplayer Do you want to play a game?\r\n")
 
 test_shoutsParsedCorrectly = 
   assertEqual "CLIP Shouts"
               (Success (Shouts "someplayer" "Anybody for a 5 point match?"), [])
-              (parseMessage "13 someplayer Anybody for a 5 point match?")
+              (parseCLIPMessage "13 someplayer Anybody for a 5 point match?\r\n")
 
 test_whispersParsedCorrectly = 
   assertEqual "CLIP Whispers"
               (Success (Whispers "someplayer" "I think he is using loaded dice  :-)"), [])
-              (parseMessage "14 someplayer I think he is using loaded dice  :-)")
+              (parseCLIPMessage "14 someplayer I think he is using loaded dice  :-)\r\n")
 
 test_kibitzesParsedCorrectly = 
   assertEqual "CLIP Kibitzes"
               (Success (Kibitzes "someplayer" "G'Day and good luck from Hobart, Australia."), [])
-              (parseMessage "15 someplayer G'Day and good luck from Hobart, Australia.")
+              (parseCLIPMessage "15 someplayer G'Day and good luck from Hobart, Australia.\r\n")
 
-test_parseMessagesIsLazy = 
-  assertEqual "parseMessages is lazy" 
+test_parseCLIPMessagesIsLazy = 
+  assertEqual "parseCLIPMessages is lazy" 
               [Success FailedLogin, Success FailedLogin]
-              (take 2 $ parseMessages $ cycle "login:")
+              (take 2 $ parseCLIPMessages $ cycle "login:")
 
 
 toUTCTime str = (fromJust $ parseTime defaultTimeLocale "%s" str)

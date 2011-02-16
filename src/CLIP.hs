@@ -3,8 +3,8 @@ module CLIP(
   ParseResult (Success, Failure),
   PlayerInfo (..),
   RedoubleLimit (..),
-  parseMessage,
-  parseMessages
+  parseCLIPMessage,
+  parseCLIPMessages
   ) where
 import Control.Applicative
 import Data.List
@@ -103,106 +103,133 @@ instance Applicative ParseResult where
   Failure msg1 <*> Failure msg2 = Failure $ msg1 ++ "; " ++ msg2
   Failure msg <*> _ = Failure msg
   Success f <*> sth = fmap f sth
-  
+
+
 -- message parsing
 
-parseMessages :: String -> [ParseResult CLIPMessage]
-parseMessages str = 
-  let (msg, rest) = parseMessage str 
-  in (msg : parseMessages rest)
+parseCLIPMessages :: String -> [ParseResult CLIPMessage]
+parseCLIPMessages str = 
+  let (msg, rest) = parseCLIPMessage str 
+  in (msg : parseCLIPMessages rest)
 
-parseMessage :: String -> (ParseResult CLIPMessage, String)
-parseMessage str = 
+parseCLIPMessage :: String -> (ParseResult CLIPMessage, String)
+parseCLIPMessage str = 
   let (first, rest) = firstLineAndRest str 
-  in parseLine (words first) rest
+      (msgNum, restOfLine) = msgNumAndRest first
+  in parseLine msgNum (stripCRLF restOfLine) rest
 
-parseLine :: [String] -> String -> (ParseResult CLIPMessage, String)
--- failed login
-parseLine ("login:" : _) rest = (Success FailedLogin, rest)
--- CLIP Welcome
-parseLine ["1", username, millisString, ip] rest = 
-  (Welcome <$> pure username <*> parseUTCTime millisString <*> pure ip, rest)
--- CLIP Own Info
-parseLine ["2", name, allowpip, autoboard, autodouble, automove, away, bell, crawford, 
-           double, experience, greedy, moreboards, moves, notify, rating, ratings, ready, 
-           redoubles, report, silent, timezone] rest = 
-  (OwnInfo <$> pure name 
-           <*> parseBool allowpip 
-           <*> parseBool autoboard 
-           <*> parseBool autodouble
-           <*> parseBool automove 
-           <*> parseBool away
-           <*> parseBool bell
-           <*> parseBool crawford
-           <*> parseBool double
-           <*> parse experience
-           <*> parseBool greedy
-           <*> parseBool moreboards
-           <*> parseBool moves
-           <*> parseBool notify
-           <*> parse rating
-           <*> parseBool ratings
-           <*> parseBool ready
-           <*> parseRedoubleLimit redoubles
-           <*> parseBool report
-           <*> parseBool silent
-           <*> pure timezone,
-   rest)
--- CLIP MOTD
-parseLine ["3"] rest = 
+parseLine :: Maybe Int -> String -> String -> (ParseResult CLIPMessage, String)
+parseLine Nothing = parseUnprefixedLine
+parseLine (Just n) = case n of
+  1  -> parseWelcome
+  2  -> parseOwnInfo
+  3  -> parseMOTD
+  5  -> parseWhoInfo
+  7  -> parseLogin
+  8  -> parseLogout
+  9  -> parseMessage
+  10 -> parseMessageDelivered
+  11 -> parseMessageSaved
+  12 -> parseSays
+  13 -> parseShouts
+  14 -> parseWhispers
+  15 -> parseKibitzes
+  --16 -> parseYouSay
+  _ -> \line rest -> (Failure $ "unrecognised message type id " ++ (show n) ++ "; rest of line: '" ++ line ++"'", 
+                      rest)
+
+parseUnprefixedLine "login:" rest = (Success FailedLogin, rest)
+parseUnprefixedLine line rest = (Failure $ "unable to parse line: '" ++ line ++ "'", rest)
+
+parseWelcome line rest =
+  let [name, lastLogin, lastHost] = words line
+  in (Welcome <$> pure name 
+              <*> parseUTCTime lastLogin 
+              <*> pure lastHost, 
+      rest)
+
+parseOwnInfo line rest =
+  let [name, allowpip, autoboard, autodouble, automove, away, bell, crawford, 
+       double, experience, greedy, moreboards, moves, notify, rating, ratings, ready, 
+       redoubles, report, silent, timezone] = words line
+  in (OwnInfo <$> pure name 
+              <*> parseBool allowpip 
+              <*> parseBool autoboard 
+              <*> parseBool autodouble
+              <*> parseBool automove 
+              <*> parseBool away
+              <*> parseBool bell
+              <*> parseBool crawford
+              <*> parseBool double
+              <*> parse experience
+              <*> parseBool greedy
+              <*> parseBool moreboards
+              <*> parseBool moves
+              <*> parseBool notify
+              <*> parse rating
+              <*> parseBool ratings
+              <*> parseBool ready
+              <*> parseRedoubleLimit redoubles
+              <*> parseBool report
+              <*> parseBool silent
+              <*> pure timezone,
+      rest)
+
+parseMOTD _ rest =
   let (motd, rest') = readMOTD "" rest
   in (Success $ MOTD motd, rest')
   where
     readMOTD acc str = 
       let (first, rest) = firstLineAndRest str
-      in case words first of 
-        ["4"] -> (acc, rest)
+      in case msgNumAndRest first of 
+        ((Just 4), _) -> (acc, rest)
         _ -> readMOTD (acc ++ first) rest
--- CLIP Who Info
-parseLine line@("5" : _) rest =
-  let (infos, rest') = parseWhoInfo [] line rest
+
+parseWhoInfo line rest =
+  let (infos, rest') = parsePlayerInfos [] (Just 5) line rest
   in (WhoInfo <$> lift infos, rest')
   where 
-    parseWhoInfo acc ["6"] rest = (acc, rest)
-    parseWhoInfo acc line@("5" : _) rest = 
-      let (next, rest') = firstLineAndRest rest
-      in parseWhoInfo (acc ++ [parsePlayerInfo line]) (words next) rest'
+    parsePlayerInfos acc (Just 6) _ rest = (acc, rest) 
+    parsePlayerInfos acc msgNum line rest = 
+      let acc' = acc ++ [parsePlayerInfo $ words line]
+          (next, rest') = firstLineAndRest rest
+          (msgNum, line') = msgNumAndRest next
+      in parsePlayerInfos acc' msgNum line' rest'
     lift [] = pure []
     lift (pr:prs) = (:) <$> pr <*> lift prs
--- CLIP Login
-parseLine ("7" : (name : msg)) rest = 
-  (Success (Login name (unwords msg)), rest)
--- CLIP Logout
-parseLine ("8" : (name : msg)) rest = 
-  (Success (Logout name (unwords msg)), rest)
--- CLIP Message
-parseLine ("9" : (from : (time : msg))) rest =
-  (Message <$> pure from
-           <*> parseUTCTime time
-           <*> pure (unwords msg),
-   rest)
--- CLIP Message Delivered
-parseLine ["10", name] rest = 
-  (Success (MessageDelivered name), rest)
--- CLIP Message Saved
-parseLine ["11", name] rest =
-  (Success (MessageSaved name), rest)
--- CLIP Says
-parseLine ("12":(name:msg)) rest =
-  (Success (Says name (unwords msg)), rest)
--- CLIP Shouts
-parseLine ("13":(name:msg)) rest =
-  (Success (Shouts name (unwords msg)), rest)
--- CLIP Whispers
-parseLine ("14":(name:msg)) rest =
-  (Success (Whispers name (unwords msg)), rest)
--- CLIP Kibitzes
-parseLine ("15":(name:msg)) rest =
-  (Success (Kibitzes name (unwords msg)), rest)
--- TODO: other cases
-parseLine words rest = (Failure $ "unable to parse: " ++ (unwords words), rest)
+  
+parseLogin = parseGenericNameMsg Login
 
-parsePlayerInfo ["5", name, opponent, watching, ready, away, rating, experience, idle, 
+parseLogout = parseGenericNameMsg Logout
+
+parseMessage line rest =
+  let (from, line') = firstWordAndRest line
+      (time, msg) = firstWordAndRest line'
+  in (Message <$> pure from
+              <*> parseUTCTime time
+              <*> pure msg,
+      rest)
+
+parseMessageDelivered name rest = 
+  (Success (MessageDelivered name), rest)
+
+parseMessageSaved name rest =
+  (Success (MessageSaved name), rest)
+
+parseSays = parseGenericNameMsg Says
+
+parseShouts = parseGenericNameMsg Shouts
+
+parseWhispers = parseGenericNameMsg Whispers
+
+parseKibitzes = parseGenericNameMsg Kibitzes
+
+parseGenericNameMsg cons line rest =  
+  let (name, msg) = firstWordAndRest line
+  in (Success (cons name msg), rest)
+     
+parsePlayerInfo :: [String] -> ParseResult PlayerInfo
+parsePlayerInfo [name, opponent, watching, ready, away, rating, experience, idle, 
                  login, hostname, client, email] = 
   PlayerInfo <$> pure name
              <*> parseMaybeString opponent
@@ -217,20 +244,6 @@ parsePlayerInfo ["5", name, opponent, watching, ready, away, rating, experience,
              <*> parseMaybeString client
              <*> parseMaybeString email
 parsePlayerInfo w = Failure $ "unable to parse " ++ (show w) ++ " as player info"
-
-firstLineAndRest :: String -> (String, String)
-firstLineAndRest str = 
-  let (revFirst, rest) = loop [] str in (reverse revFirst, rest)
-  where
-    rTermStrs = map reverse lineTerminators
-    loop acc [] = (acc, [])
-    loop acc (h:t) = 
-      let currStr = (h:acc) 
-      in if rTermStrs `containsPrefixOf` currStr then (currStr, t) else loop currStr t
-
-strs `containsPrefixOf` str = foldl (\b s -> b || s `isPrefixOf` str) False strs
-
-lineTerminators = ["\n", "login:"]
 
 parse :: Read a => String -> ParseResult a
 parse str = case reads str of
@@ -256,4 +269,41 @@ parseUTCTime :: String -> ParseResult UTCTime
 parseUTCTime str = case parseTime defaultTimeLocale "%s" str of
   Just time -> Success time
   Nothing -> Failure $ "unable to parse '" ++ str ++ "' as UTCTime"
+
+-- helper string splitting functions
+
+lineTerminators = ["\r\n", "login:"]
+
+firstLineAndRest :: String -> (String, String)
+firstLineAndRest = firstAndRest lineTerminators True
+
+firstWordAndRest :: String -> (String, String)
+firstWordAndRest = firstAndRest [" ", "\r\n"] False
+
+msgNumAndRest :: String -> (Maybe Int, String)
+msgNumAndRest str = 
+  let (first, rest) = firstWordAndRest str
+  in case reads first of
+    [(num, "")] -> (Just num, rest)
+    _ -> (Nothing, str)
+
+firstAndRest :: [String] -> Bool -> String -> (String, String)
+firstAndRest terminators retainTerm str = 
+  let (revFirst, rest) = loop [] str in (reverse revFirst, rest)
+  where
+    rTermStrs = map reverse terminators
+    loop acc [] = (acc, [])
+    loop acc (h:t) = 
+      let acc' = h:acc
+      in case findPrefix rTermStrs acc' of  
+        Just p -> (if retainTerm then acc' else drop (length p) acc', t)
+        Nothing -> loop acc' t
+
+findPrefix :: [String] -> String -> Maybe String
+findPrefix [] str = Nothing
+findPrefix (prefix:prefixes) str = 
+  if prefix `isPrefixOf` str then (Just prefix) else findPrefix prefixes str
+
+stripCRLF :: String -> String
+stripCRLF str = if "\r\n" `isSuffixOf` str then init (init str) else str
 
