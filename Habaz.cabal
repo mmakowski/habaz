@@ -7,6 +7,6 @@ Synopsis:       A FIBS client
 Build-Type:     Simple
 
 Executable habaz
-  Build-Depends:  base, network, old-locale, time, wx
+  Build-Depends:  base >= 4, network, old-locale, time, wx
   Main-Is:        Main.hs
   Hs-Source-Dirs: src
