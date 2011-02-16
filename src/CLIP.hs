@@ -35,6 +35,7 @@ data PlayerInfo
 
 data CLIPMessage 
      = FailedLogin
+     | FreeForm String
      | Welcome { name :: String
                , lastLogin :: UTCTime
                , lastHost :: String 
@@ -87,6 +88,12 @@ data CLIPMessage
      | Kibitzes { name :: String
                 , message :: String
                 }
+     | YouSay { name :: String
+              , message :: String
+              }
+     | YouShout { message :: String }
+     | YouWhisper { message :: String }
+     | YouKibitz { message :: String }
      deriving (Eq, Show)
 
 data ParseResult a 
@@ -139,6 +146,7 @@ parseLine (Just n) = case n of
                       rest)
 
 parseUnprefixedLine "login:" rest = (Success FailedLogin, rest)
+parseUnprefixedLine "" rest = parseFreeForm rest
 parseUnprefixedLine line rest = (Failure $ "unable to parse line: '" ++ line ++ "'", rest)
 
 parseWelcome line rest =
@@ -228,6 +236,11 @@ parseGenericNameMsg cons line rest =
   let (name, msg) = firstWordAndRest line
   in (Success (cons name msg), rest)
      
+parseFreeForm :: String -> (ParseResult CLIPMessage, String)
+parseFreeForm str = 
+  let (first, rest) = firstLineAndRest str
+  in (Success (FreeForm (stripCRLF first)), rest)
+
 parsePlayerInfo :: [String] -> ParseResult PlayerInfo
 parsePlayerInfo [name, opponent, watching, ready, away, rating, experience, idle, 
                  login, hostname, client, email] = 

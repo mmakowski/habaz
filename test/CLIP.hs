@@ -10,6 +10,11 @@ test_failedLoginParsedCorrectly =
               (Success FailedLogin, []) 
               (parseCLIPMessage "login:")
 
+test_freeFormParsedCorrectly =
+  assertEqual "free form"
+              (Success (FreeForm "aleks and Ubaretzu start a 1 point match."), [])
+              (parseCLIPMessage "\r\naleks and Ubaretzu start a 1 point match.\r\n")
+              
 test_welcomeParsedCorrectly = 
   assertEqual "CLIP Welcome"
               (Success (Welcome "username" (toUTCTime "1041253132") "1.2.3.4"), [])
