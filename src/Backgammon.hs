@@ -1,4 +1,12 @@
-module Backgammon where
+module Backgammon( 
+  Board,
+  Peg,
+  Player (..),
+  count,
+  initialBoard,
+  owner,
+  pegs
+  ) where
 import Data.Array
 import qualified Data.Map as Map
 

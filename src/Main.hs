@@ -1,4 +1,6 @@
 module Main where
+import Backgammon
+import Data.Array
 import FIBSClient
 import Graphics.UI.WX
 
@@ -12,36 +14,58 @@ main = start habazWindow
 habazWindow :: IO ()
 habazWindow =
   do f <- frame [text := "Habaz"]
-     p <- panel f [on paint := paintBoard]
+     p <- panel f [on paint := paintBoard initialBoard]
      set f [layout := minsize (sz startWidth startHeight) $ widget p]
 
 barWidthRatio = 0.08
 homeWidthRatio = 0.08
 
-paintBoard :: DC a -> Rect -> IO ()
-paintBoard dc viewArea = 
+paintBoard :: Board -> DC a -> Rect -> IO ()
+paintBoard board dc viewArea = 
   do let quarterHeight = rectHeight viewArea `div` 2
          barWidth = round $ (fromIntegral (rectWidth viewArea)) * barWidthRatio
          homeWidth = round $ (fromIntegral (rectWidth viewArea)) * homeWidthRatio
          quarterWidth = (rectWidth viewArea - barWidth - homeWidth) `div` 2
-     mapM_ (\p -> drawQuarter dc p (if pointY p > 0 then -1 else 1) quarterWidth quarterHeight) 
-           [Point x y | x <- [0, quarterWidth + barWidth], y <- [0, quarterHeight * 2]]
-                     
-drawQuarter :: DC a -> Point -> Int -> Int -> Int -> IO ()
-drawQuarter dc origin orientation width height =
+         quarterOrigins = [Point (quarterWidth + barWidth) (quarterHeight * 2),
+                           Point 0 (quarterHeight * 2),
+                           Point 0 0,
+                           Point (quarterWidth + barWidth) 0]
+         pegSets = map (map (pegs board !)) [[1..6], [7..12], [13..18], [19..24]]
+         drawQWPegsFromOrig = \(p, o) -> drawQuarter p dc o (if pointY o > 0 then -1 else 1) 
+                                                     quarterWidth quarterHeight
+     mapM_ drawQWPegsFromOrig (pegSets `zip` quarterOrigins)
+     
+drawQuarter :: [Peg] -> DC a -> Point -> Int -> Int -> Int -> IO ()
+drawQuarter pegs dc origin orientation width height =
   do let pegWidth = width `div` 6
          pegHeight = round (fromIntegral height * 0.8)
-     drawPegs dc 6 origin orientation pegWidth pegHeight
+     drawPegs (if orientation == -1 then reverse pegs else pegs) dc 6 pegWidth pegHeight
   where
-    drawPegs _ 0 _ _ _ _ = return ()
-    drawPegs dc pegNum origin orientation width height =
-      do let colour = if (pegNum + ((orientation + 1) `div` 2)) `mod` 2 == 1 then red else white
-         set dc [brushColor := colour, brushKind := BrushSolid]
-         drawPeg dc (pointAdd origin (Point (width * (6 - pegNum)) 0)) orientation width height
-         drawPegs dc (pegNum - 1) origin orientation width height
+    drawPegs _ _ 0 _ _ = return ()
+    drawPegs (peg:pegs) dc pegNum width height =
+      do let pegColour = if (pegNum + ((orientation + 1) `div` 2)) `mod` 2 == 1 then red else white
+             pieceColour = case owner peg of
+               Just White -> white
+               _ -> black
+             pegOrigin = pointAdd origin (Point (width * (6 - pegNum)) 0)
+         set dc [brushColor := pegColour, brushKind := BrushSolid]
+         drawPeg dc pegOrigin orientation width height
+         set dc [brushColor := pieceColour]
+         drawPieces (count peg) dc pegOrigin orientation width height
+         drawPegs pegs dc (pegNum - 1) width height
 
 drawPeg :: DC a -> Point -> Int -> Int -> Int -> IO ()
 drawPeg dc origin orientation width height =
   polygon dc [origin, 
               (pointAdd origin (Point width 0)), 
               (pointAdd origin (Point (width `div` 2) (height*orientation)))] []
+  
+drawPieces :: Int -> DC a -> Point -> Int -> Int -> Int -> IO()
+drawPieces n = drawPieces' n n
+  where
+    drawPieces' 0 _ _ _ _ _ _ = return ()
+    drawPieces' n total dc origin orientation width height =
+      do let radius = width `div` 2
+             centre = pointAdd origin (Point radius (((n - 1) * 2 + 1) * radius * orientation))
+         circle dc centre radius []
+         drawPieces' (n - 1) total dc origin orientation width height
