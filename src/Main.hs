@@ -44,28 +44,27 @@ drawQuarter pegs dc origin orientation width height =
     drawPegs _ _ 0 _ _ = return ()
     drawPegs (peg:pegs) dc pegNum width height =
       do let pegColour = if (pegNum + ((orientation + 1) `div` 2)) `mod` 2 == 1 then red else white
-             pieceColour = case owner peg of
-               Just White -> white
-               _ -> black
              pegOrigin = pointAdd origin (Point (width * (6 - pegNum)) 0)
-         set dc [brushColor := pegColour, brushKind := BrushSolid]
-         drawPeg dc pegOrigin orientation width height
-         set dc [brushColor := pieceColour]
-         drawPieces (count peg) dc pegOrigin orientation width height
+         drawPeg peg dc pegOrigin orientation width height pegColour
          drawPegs pegs dc (pegNum - 1) width height
 
-drawPeg :: DC a -> Point -> Int -> Int -> Int -> IO ()
-drawPeg dc origin orientation width height =
-  polygon dc [origin, 
-              (pointAdd origin (Point width 0)), 
-              (pointAdd origin (Point (width `div` 2) (height*orientation)))] []
-  
-drawPieces :: Int -> DC a -> Point -> Int -> Int -> Int -> IO()
-drawPieces n = drawPieces' n n
+drawPeg :: Peg -> DC a -> Point -> Int -> Int -> Int -> Color -> IO ()
+drawPeg peg dc origin orientation width height colour =
+  do polygon dc [origin, 
+                 (pointAdd origin (Point width 0)), 
+                 (pointAdd origin (Point (width `div` 2) (height * orientation)))] 
+             [brushColor := colour]
+     let pieceColour = case owner peg of
+           Just White -> white
+           _ -> black
+     drawPieces (count peg) dc origin orientation width height pieceColour
+
+drawPieces :: Int -> DC a -> Point -> Int -> Int -> Int -> Color -> IO()
+drawPieces n dc origin orientation width height colour = drawPieces' n n
   where
-    drawPieces' 0 _ _ _ _ _ _ = return ()
-    drawPieces' n total dc origin orientation width height =
+    drawPieces' 0 _ = return ()
+    drawPieces' n total =
       do let radius = width `div` 2
              centre = pointAdd origin (Point radius (((n - 1) * 2 + 1) * radius * orientation))
-         circle dc centre radius []
-         drawPieces' (n - 1) total dc origin orientation width height
+         circle dc centre radius [brushColor := colour]
+         drawPieces' (n - 1) total
