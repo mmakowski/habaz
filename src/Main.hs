@@ -5,8 +5,8 @@ import FIBSClient
 import Graphics.UI.WX
 
 startWidth, startHeight :: Int
-startWidth = 400
-startHeight = 300
+startWidth = 500
+startHeight = 500
 
 main :: IO ()
 main = start habazWindow
@@ -15,7 +15,10 @@ habazWindow :: IO ()
 habazWindow =
   do f <- frame [text := "Habaz"]
      p <- panel f [on paint := paintBoard initialBoard]
-     set f [layout := minsize (sz startWidth startHeight) $ widget p]
+     set f [layout := minsize (sz startWidth startHeight) $ widget p,
+            on resize := do newSize <- get f clientSize
+                            set p [outerSize := newSize]
+                            repaint p]
 
 barWidthRatio = 0.08
 homeWidthRatio = 0.08
