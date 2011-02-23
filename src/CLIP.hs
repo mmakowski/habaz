@@ -10,11 +10,12 @@ module CLIP(
   formatCommand
   ) where
 import Control.Applicative
+import Data.Char
 import Data.List
 import Data.Time
 import System.Locale
 
--- TODO: move to a separate Backgammon module
+
 data RedoubleLimit
      = LimitedTo Int
      | Unlimited
@@ -294,14 +295,14 @@ parseUTCTime str = case parseTime defaultTimeLocale "%s" str of
   Just time -> Success time
   Nothing -> Failure $ "unable to parse '" ++ str ++ "' as UTCTime"
 
+
 -- command formatting
   
 formatCommand :: Command -> String
 formatCommand (Toggle flag) = "toggle " ++ (formatFlag flag)
 
 formatFlag :: Flag -> String
-formatFlag flag = case flag of 
-  Ready -> "ready"
+formatFlag = map toLower . show
 
 
 -- helper string splitting functions
