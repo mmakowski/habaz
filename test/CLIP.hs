@@ -1,9 +1,10 @@
 import CLIP
-
+import Data.Char
 import Data.Maybe
 import Data.Time
 import System.Locale
 import Test.HUnit
+import Test.QuickCheck
 
 test_failedLoginParsedCorrectly = 
   assertEqual "failed login" 
@@ -88,6 +89,11 @@ test_parseCLIPMessagesIsLazy =
               [Success FailedLogin, Success FailedLogin]
               (take 2 $ parseCLIPMessages $ cycle "login:")
 
+instance Test.QuickCheck.Arbitrary Command where
+  arbitrary = elements [Toggle Ready] -- TODO: more examples
+  coarbitrary _ = id -- TODO
+
+prop_formatCommand cmd@(Toggle flag) = "toggle " ++ (map toLower $ show flag) == formatCommand cmd
 
 toUTCTime str = (fromJust $ parseTime defaultTimeLocale "%s" str)
 

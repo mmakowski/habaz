@@ -3,8 +3,11 @@ module CLIP(
   ParseResult (Success, Failure),
   PlayerInfo (..),
   RedoubleLimit (..),
+  Flag (..),
+  Command (..),
   parseCLIPMessage,
-  parseCLIPMessages
+  parseCLIPMessages,
+  formatCommand
   ) where
 import Control.Applicative
 import Data.List
@@ -94,6 +97,14 @@ data CLIPMessage
      | YouShout { message :: String }
      | YouWhisper { message :: String }
      | YouKibitz { message :: String }
+     deriving (Eq, Show)
+
+data Flag
+     = Ready
+     deriving (Eq, Show)
+
+data Command
+     = Toggle Flag
      deriving (Eq, Show)
 
 data ParseResult a 
@@ -282,6 +293,16 @@ parseUTCTime :: String -> ParseResult UTCTime
 parseUTCTime str = case parseTime defaultTimeLocale "%s" str of
   Just time -> Success time
   Nothing -> Failure $ "unable to parse '" ++ str ++ "' as UTCTime"
+
+-- command formatting
+  
+formatCommand :: Command -> String
+formatCommand (Toggle flag) = "toggle " ++ (formatFlag flag)
+
+formatFlag :: Flag -> String
+formatFlag flag = case flag of 
+  Ready -> "ready"
+
 
 -- helper string splitting functions
 

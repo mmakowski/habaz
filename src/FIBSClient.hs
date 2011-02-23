@@ -11,8 +11,6 @@ import Network.BSD
 import System.IO
 
 
-type Command = String
-
 -- TODO: manage connection state more thoroughly
 data Connection = Disconnected
                 | Connected Handle
@@ -42,7 +40,7 @@ readUntil termStrs (Connected conn) = liftM reverse $ loop []
 readLine :: Connection -> IO String
 readLine = readUntil ["\n", "login:"] 
 
-send :: Connection -> Command -> IO Connection
+send :: Connection -> String -> IO Connection
 send conn@(Connected handle) cmd =
   do hPutStrLn handle cmd
      hFlush handle
@@ -87,8 +85,6 @@ logout conn@(Connected _) =
   do send conn $ "bye"
      return ()
     
-     
--- play in progress:
 
 readMessages :: Connection -> IO [CLIP.ParseResult CLIPMessage]
 readMessages (Connected h) = 
@@ -96,9 +92,22 @@ readMessages (Connected h) =
     msgStr <- hGetContents h -- lazy!
     return $ parseCLIPMessages msgStr
 
+-- sendCommand :: Connection -> Command -> IO ()
+-- sendCommand (Connected h) command = 
+
+-- play in progress:
+
+
 test = 
   do conn <- connect defaultFibsHost defaultFibsPort
      login conn "Habaź" "habaztest_a" "habaztest"
      take 30 <$> readMessages conn >>= putStrLn . show
      logout conn
      disconnect conn
+
+playWithMmakowski = 
+  do conn <- connect defaultFibsHost defaultFibsPort
+     login conn "Habaź_v0.1.0" "habaztest_a" "habaztest"
+     logout conn
+     disconnect conn
+  
