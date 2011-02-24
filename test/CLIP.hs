@@ -11,6 +11,11 @@ test_failedLoginParsedCorrectly =
               (Success FailedLogin, []) 
               (parseCLIPMessage "login:")
 
+test_blankLineIsSkipped = 
+  assertEqual "blank line is skipped"
+              (Success (System "system message"), [])
+              (parseCLIPMessage "\r\n** system message")
+
 test_freeFormParsedCorrectly =
   assertEqual "free form"
               (Success (FreeForm "aleks and Ubaretzu start a 1 point match."), [])

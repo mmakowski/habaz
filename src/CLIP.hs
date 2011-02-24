@@ -157,8 +157,8 @@ parseLine (Just n) = case n of
 
 parseUnprefixedLine "login:" rest = (Success FailedLogin, rest)
 parseUnprefixedLine ('*':('*':(' ':msg))) rest = (Success (System msg), rest)
-parseUnprefixedLine "" rest = parseFreeForm rest
-parseUnprefixedLine line rest = (Failure $ "unable to parse line: '" ++ line ++ "'", rest)
+parseUnprefixedLine "" rest = skip "" rest
+parseUnprefixedLine line rest = (Success (FreeForm line), rest)
 
 skip _ rest = parseCLIPMessage rest
 
@@ -253,11 +253,6 @@ parseGenericNameMsg cons line rest =
   let (name, msg) = firstWordAndRest line
   in (Success (cons name msg), rest)
      
-parseFreeForm :: String -> (ParseResult CLIPMessage, String)
-parseFreeForm str = 
-  let (first, rest) = firstLineAndRest str
-  in (Success (FreeForm (stripCRLF first)), rest)
-
 parse :: Read a => String -> ParseResult a
 parse str = case reads str of
   [(val, "")] -> Success val
