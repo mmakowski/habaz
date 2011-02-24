@@ -1,7 +1,7 @@
 module FIBSClient where 
 import Control.Applicative
 import Control.Monad
-import CLIP hiding (ParseResult (..))
+import CLIP hiding (ParseResult (..), login)
 import qualified CLIP (ParseResult (..))
 import Data.Bits
 import Data.List
@@ -92,8 +92,10 @@ readMessages (Connected h) =
     msgStr <- hGetContents h -- lazy!
     return $ parseCLIPMessages msgStr
 
--- sendCommand :: Connection -> Command -> IO ()
--- sendCommand (Connected h) command = 
+sendCommand :: Connection -> Command -> IO ()
+sendCommand conn@(Connected _) cmd = 
+  do send conn $ formatCommand cmd
+     return ()
 
 -- play in progress:
 
@@ -108,6 +110,11 @@ test =
 playWithMmakowski = 
   do conn <- connect defaultFibsHost defaultFibsPort
      login conn "Habaź_v0.1.0" "habaztest_a" "habaztest"
+     msgs <- readMessages conn
+     (return $ take 200 msgs) >>= putStrLn . show
+     let msgs' = drop 200 msgs
+     sendCommand conn (Toggle Ready)
+     (return $ take 10 msgs') >>= putStrLn . show      
      logout conn
      disconnect conn
   

@@ -29,15 +29,17 @@ test_ownInfoParsedCorrectly =
 test_motdParsedCorrectly = 
   assertEqual "CLIP MOTD"
               (Success (MOTD motd), [])
-              (parseCLIPMessage $ "3\r\n" ++ motd ++ "4\r\n")
+              (parseCLIPMessage $ "3\r\n" ++ motd ++ "4\r\n\r\n")
 
 test_whoInfoParsedCorrectly = 
   assertEqual "CLIP Who Info"
-              (Success (WhoInfo [
-                           (PlayerInfo "mgnu_advanced" (Just "someplayer") Nothing True False 1912.15 827 8 (toUTCTime "1040515752") "192.168.143.5" (Just "3DFiBs") Nothing),
-                           (PlayerInfo "someplayer" (Just "mgnu_advanced") Nothing False False 1418.61 23 1914 (toUTCTime "1041272421") "192.168.40.3" (Just "MacFIBS") (Just "someplayer@somewhere.com")),
-                           (PlayerInfo "anotherplayer" Nothing Nothing False False 1439.79 1262 410 (toUTCTime "1041251697") "somehost.com" Nothing Nothing)]), [])
-              (parseCLIPMessage whoInfoMsg)
+              (Success (WhoInfo "mgnu_advanced" (Just "someplayer") Nothing True False 1912.15 827 8 (toUTCTime "1040515752") "192.168.143.5" (Just "3DFiBs") Nothing), [])
+              (parseCLIPMessage "5 mgnu_advanced someplayer - 1 0 1912.15 827 8 1040515752 192.168.143.5 3DFiBs -")
+
+test_endOfWhoInfoBlockIsSkipped =
+  assertEqual "end of Who Info block is skipped"
+              (Success (FreeForm "some message"), [])
+              (parseCLIPMessage "6\r\n\r\nsome message\r\n")
 
 test_loginParsedCorrectly =
   assertEqual "CLIP Login"
@@ -84,6 +86,11 @@ test_kibitzesParsedCorrectly =
               (Success (Kibitzes "someplayer" "G'Day and good luck from Hobart, Australia."), [])
               (parseCLIPMessage "15 someplayer G'Day and good luck from Hobart, Australia.\r\n")
 
+test_systemParsedCorrectly =
+  assertEqual "System **"
+              (Success (System "You're now ready to invite or join someone."), [])
+              (parseCLIPMessage "** You're now ready to invite or join someone.\r\n")
+
 test_parseCLIPMessagesIsLazy = 
   assertEqual "parseCLIPMessages is lazy" 
               [Success FailedLogin, Success FailedLogin]
@@ -121,9 +128,3 @@ motd =
   \| server.                                                            |\r\n\
   \|                                                                    |\r\n\
   \+--------------------------------------------------------------------+\r\n"
-
-whoInfoMsg = 
-  "5 mgnu_advanced someplayer - 1 0 1912.15 827 8 1040515752 192.168.143.5 3DFiBs -\r\n\
-  \5 someplayer mgnu_advanced - 0 0 1418.61 23 1914 1041272421 192.168.40.3 MacFIBS someplayer@somewhere.com\r\n\
-  \5 anotherplayer - - 0 0 1439.79 1262 410 1041251697 somehost.com - -\r\n\
-  \6\r\n"

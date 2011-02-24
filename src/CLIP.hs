@@ -1,7 +1,6 @@
 module CLIP(
   CLIPMessage (..), 
   ParseResult (Success, Failure),
-  PlayerInfo (..),
   RedoubleLimit (..),
   Flag (..),
   Command (..),
@@ -19,22 +18,6 @@ import System.Locale
 data RedoubleLimit
      = LimitedTo Int
      | Unlimited
-     deriving (Eq, Show)
-
-data PlayerInfo 
-     = PlayerInfo { pName :: String
-                  , pOpponent :: Maybe String
-                  , pWatching :: Maybe String
-                  , pReady :: Bool
-                  , pAway :: Bool
-                  , pRating :: Float
-                  , pExperience :: Int
-                  , pIdle :: Int
-                  , pLogin :: UTCTime
-                  , pHostName :: String
-                  , pClient :: Maybe String
-                  , pEmail :: Maybe String
-                  }
      deriving (Eq, Show)
 
 data CLIPMessage 
@@ -67,7 +50,20 @@ data CLIPMessage
                , timeZone :: String
                }
      | MOTD String
-     | WhoInfo [PlayerInfo]
+     | WhoInfo { name :: String
+               , opponent :: Maybe String
+               , watching :: Maybe String
+               , ready :: Bool
+               , away :: Bool
+               , rating :: Float
+               , experience :: Int
+               , idle :: Int
+               , login :: UTCTime
+               , hostName :: String
+               , client :: Maybe String
+               , email :: Maybe String
+               }
+     | EndOfWhoInfoBlock
      | Login { name :: String
              , message :: String
              }
@@ -98,6 +94,7 @@ data CLIPMessage
      | YouShout { message :: String }
      | YouWhisper { message :: String }
      | YouKibitz { message :: String }
+     | System { message :: String }
      deriving (Eq, Show)
 
 data Flag
@@ -144,6 +141,7 @@ parseLine (Just n) = case n of
   2  -> parseOwnInfo
   3  -> parseMOTD
   5  -> parseWhoInfo
+  6  -> skip
   7  -> parseLogin
   8  -> parseLogout
   9  -> parseMessage
@@ -158,8 +156,11 @@ parseLine (Just n) = case n of
                       rest)
 
 parseUnprefixedLine "login:" rest = (Success FailedLogin, rest)
+parseUnprefixedLine ('*':('*':(' ':msg))) rest = (Success (System msg), rest)
 parseUnprefixedLine "" rest = parseFreeForm rest
 parseUnprefixedLine line rest = (Failure $ "unable to parse line: '" ++ line ++ "'", rest)
+
+skip _ rest = parseCLIPMessage rest
 
 parseWelcome line rest =
   let [name, lastLogin, lastHost] = words line
@@ -202,22 +203,26 @@ parseMOTD _ rest =
     readMOTD acc str = 
       let (first, rest) = firstLineAndRest str
       in case msgNumAndRest first of 
-        ((Just 4), _) -> (acc, rest)
+        ((Just 4), _) -> let (_, rest') = firstLineAndRest rest in (acc, rest')
         _ -> readMOTD (acc ++ first) rest
 
-parseWhoInfo line rest =
-  let (infos, rest') = parsePlayerInfos [] (Just 5) line rest
-  in (WhoInfo <$> lift infos, rest')
-  where 
-    parsePlayerInfos acc (Just 6) _ rest = (acc, rest) 
-    parsePlayerInfos acc msgNum line rest = 
-      let acc' = acc ++ [parsePlayerInfo $ words line]
-          (next, rest') = firstLineAndRest rest
-          (msgNum, line') = msgNumAndRest next
-      in parsePlayerInfos acc' msgNum line' rest'
-    lift [] = pure []
-    lift (pr:prs) = (:) <$> pr <*> lift prs
-  
+parseWhoInfo line rest = 
+  let [name, opponent, watching, ready, away, rating, experience, idle, 
+       login, hostname, client, email] = words line
+  in (WhoInfo <$> pure name
+              <*> parseMaybeString opponent
+              <*> parseMaybeString watching
+              <*> parseBool ready
+              <*> parseBool away
+              <*> parse rating
+              <*> parse experience
+              <*> parse idle
+              <*> parseUTCTime login
+              <*> pure hostname
+              <*> parseMaybeString client
+              <*> parseMaybeString email,
+      rest)
+
 parseLogin = parseGenericNameMsg Login
 
 parseLogout = parseGenericNameMsg Logout
@@ -252,23 +257,6 @@ parseFreeForm :: String -> (ParseResult CLIPMessage, String)
 parseFreeForm str = 
   let (first, rest) = firstLineAndRest str
   in (Success (FreeForm (stripCRLF first)), rest)
-
-parsePlayerInfo :: [String] -> ParseResult PlayerInfo
-parsePlayerInfo [name, opponent, watching, ready, away, rating, experience, idle, 
-                 login, hostname, client, email] = 
-  PlayerInfo <$> pure name
-             <*> parseMaybeString opponent
-             <*> parseMaybeString watching
-             <*> parseBool ready
-             <*> parseBool away
-             <*> parse rating
-             <*> parse experience
-             <*> parse idle
-             <*> parseUTCTime login
-             <*> pure hostname
-             <*> parseMaybeString client
-             <*> parseMaybeString email
-parsePlayerInfo w = Failure $ "unable to parse " ++ (show w) ++ " as player info"
 
 parse :: Read a => String -> ParseResult a
 parse str = case reads str of
