@@ -107,14 +107,28 @@ test =
      logout conn
      disconnect conn
 
+dropUntil cond ((CLIP.Failure _):msgs) = dropUntil cond msgs
+dropUntil cond ((CLIP.Success msg):msgs) = 
+  if cond msg then (msg, msgs) else dropUntil cond msgs
+
 playWithMmakowski = 
   do conn <- connect defaultFibsHost defaultFibsPort
      login conn "Habaź_v0.1.0" "habaztest_a" "habaztest"
      msgs <- readMessages conn
-     (return $ take 200 msgs) >>= putStrLn . show
-     let msgs' = drop 200 msgs
-     sendCommand conn (Toggle Ready)
-     (return $ take 10 msgs') >>= putStrLn . show      
+     let (ownInfo, msgs') = dropUntil isOwnInfo msgs
+     putStrLn (show ownInfo)
+     if ready ownInfo
+       then putStrLn "ready already!"
+       else do 
+         sendCommand conn (Toggle Ready)
+         let (system, msgs'') = dropUntil isFreeForm msgs'
+         putStrLn (show system)
      logout conn
      disconnect conn
-  
+  where
+    isOwnInfo (OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = True
+    isOwnInfo _ = False
+    isSystem (System _) = True
+    isSystem _ = False
+    isFreeForm (FreeForm _) = True
+    isFreeForm _ = False
