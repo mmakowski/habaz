@@ -14,7 +14,11 @@ main = start habazWindow
 habazWindow :: IO ()
 habazWindow =
   do f <- frame [text := "Habaz"]
-     p <- panel f [on paint := paintBoard initialBoard]
+     state <- variable [value := "TODO: game state"]
+     p <- panel f [on paint := paintBoard initialBoard,
+                   on click := \p -> infoDialog f "dupa" (show p)]
+     t <- timer f [interval := 10,
+                   on command := gameCycle]
      set f [layout := minsize (sz startWidth startHeight) $ widget p,
             on resize := do newSize <- get f clientSize
                             set p [outerSize := newSize]
@@ -22,6 +26,11 @@ habazWindow =
 
 barWidthRatio = 0.08
 homeWidthRatio = 0.08
+
+gameCycle = 
+  do
+    -- TODO: cycle causes GUI to hang. How do I process async events? gameCycle
+    return ()
 
 paintBoard :: Board -> DC a -> Rect -> IO ()
 paintBoard board dc viewArea = 
