@@ -1,5 +1,8 @@
 module Main where
 import Backgammon
+import Control.Concurrent
+import Control.Concurrent.STM
+import Control.Monad
 import Data.Array
 import FIBSClient
 import Graphics.UI.WX
@@ -9,16 +12,22 @@ startWidth = 500
 startHeight = 500
 
 main :: IO ()
-main = start habazWindow
+main = 
+  do msgsTV <- newTVarIO []
+     forkIO $ commThread msgsTV
+     start (habazWindow msgsTV)
 
-habazWindow :: IO ()
-habazWindow =
+commThread msgsTV = forever $
+  do atomically $ writeTVar msgsTV ["dupa"]
+     
+habazWindow :: TVar [String] -> IO ()
+habazWindow msgsTV =
   do f <- frame [text := "Habaz"]
      state <- variable [value := "TODO: game state"]
      p <- panel f [on paint := paintBoard initialBoard,
                    on click := \p -> infoDialog f "dupa" (show p)]
-     t <- timer f [interval := 10,
-                   on command := gameCycle]
+     t <- timer f [interval := 5000,
+                   on command := gameCycle msgsTV state f]
      set f [layout := minsize (sz startWidth startHeight) $ widget p,
             on resize := do newSize <- get f clientSize
                             set p [outerSize := newSize]
@@ -27,10 +36,21 @@ habazWindow =
 barWidthRatio = 0.08
 homeWidthRatio = 0.08
 
-gameCycle = 
-  do
-    -- TODO: cycle causes GUI to hang. How do I process async events? gameCycle
-    return ()
+gameCycle msgsTV state f = 
+  do msgs <- readAndReset msgsTV
+     updateState msgs state
+     msg <- get state value
+     infoDialog f "update" msg
+  where
+    readAndReset msgsTV = atomically $
+      do msgs <- readTVar msgsTV
+         writeTVar msgsTV []
+         return msgs
+         
+updateState [] state = return ()
+updateState (h:t) state = 
+  do set state [value := h]
+     updateState t state
 
 paintBoard :: Board -> DC a -> Rect -> IO ()
 paintBoard board dc viewArea = 
