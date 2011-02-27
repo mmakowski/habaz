@@ -5,17 +5,14 @@ import Data.Bits
 import Data.Char
 import Data.List
 import Data.Time
-import Network.Socket hiding (Connected, connect, send)
+import Network.Socket hiding (connect, send)
 import qualified Network.Socket (connect)
 import Network.BSD
 import System.IO
 import System.Locale
 
 
-
--- TODO: manage connection state more thoroughly
-data Connection = Disconnected
-                | Connected Handle
+type Connection = Handle
                   
 data LoginStatus = LoginSuccess
                  | LoginFailure String
@@ -340,7 +337,7 @@ stripCRLF str = if "\r\n" `isSuffixOf` str then init (init str) else str
 -- communication primitives
 
 readUntil :: [String] -> Connection -> IO String
-readUntil termStrs (Connected conn) = liftM reverse $ loop []
+readUntil termStrs conn = liftM reverse $ loop []
   where
     rTermStrs = map reverse termStrs
     isTerminated rstr (rTermStr:rTermStrs) = isPrefixOf rTermStr rstr || isTerminated rstr rTermStrs
@@ -353,11 +350,10 @@ readUntil termStrs (Connected conn) = liftM reverse $ loop []
 readLine :: Connection -> IO String
 readLine = readUntil ["\n", "login:"] 
 
-send :: Connection -> String -> IO Connection
-send conn@(Connected handle) cmd =
-  do hPutStrLn handle cmd
-     hFlush handle
-     return conn
+send :: Connection -> String -> IO ()
+send conn cmd =
+  do hPutStrLn conn cmd
+     hFlush conn
 
 
 -- interface functions
@@ -372,17 +368,17 @@ connect hostname port =
      setSocketOption sock KeepAlive 1
      Network.Socket.connect sock (addrAddress serveraddr)
      conn <- socketToHandle sock ReadWriteMode
-     return $ Connected conn
+     return $ conn
 
 disconnect :: Connection -> IO ()
-disconnect (Connected conn) = hClose conn
+disconnect conn = hClose conn
 
 login :: Connection     -- ^ An open connection
       -> String         -- ^ Client name
       -> String         -- ^ User name
       -> String         -- ^ Password
       -> IO LoginStatus -- ^ The status of loggin attempt
-login conn@(Connected _) clientname username password = 
+login conn clientname username password = 
   do readUntil ["login:"] conn
      send conn $ "login " ++ clientname ++ " " ++ clipVersion ++ " " ++ username ++ " " ++ password
      readUntil ["\n"] conn
@@ -394,19 +390,16 @@ login conn@(Connected _) clientname username password =
      
 logout :: Connection    -- ^ An open connection
        -> IO ()
-logout conn@(Connected _) = 
-  do send conn $ "bye"
-     return ()
+logout conn = send conn $ "bye"
     
 
 readMessages :: Connection -> IO [ParseResult FIBSMessage]
-readMessages (Connected h) = 
-  do
-    msgStr <- hGetContents h -- lazy!
-    return $ parseFIBSMessages msgStr
+readMessages conn = 
+  do msgStr <- hGetContents conn -- lazy!
+     return $ parseFIBSMessages msgStr
 
 sendCommand :: Connection -> Command -> IO ()
-sendCommand conn@(Connected _) cmd = 
+sendCommand conn cmd = 
   do send conn $ formatCommand cmd
      return ()
 
