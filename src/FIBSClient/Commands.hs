@@ -26,9 +26,12 @@ data FIBSCommand
      deriving (Eq, Show)
 
 instance Test.QuickCheck.Arbitrary FIBSCommand where
-  arbitrary = elements toggles
+  arbitrary = toggles
     where 
-      toggles = map (\f -> Toggle f) $ generate 20 (System.Random.mkStdGen 0) arbitrary
+      toggles = 
+        do f <- arbitrary 
+           return (Toggle f)
+                   
   coarbitrary _ = id -- not needed
 
 

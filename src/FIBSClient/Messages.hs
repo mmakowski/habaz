@@ -19,6 +19,7 @@ import Control.Applicative
 import Data.List
 import Data.Time
 import Test.HUnit
+import Test.QuickCheck
 import TestUtils
 import System.Locale
 
@@ -30,6 +31,7 @@ data RedoubleLimit
 data FIBSMessage 
      = FailedLogin
      | FreeForm String
+     | System { message :: String }
      | Welcome { name :: String
                , lastLogin :: UTCTime
                , lastHost :: String 
@@ -103,7 +105,6 @@ data FIBSMessage
      | YouShout { message :: String }
      | YouWhisper { message :: String }
      | YouKibitz { message :: String }
-     | System { message :: String }
      deriving (Eq, Show)
 
 data ParseResult a 
@@ -121,6 +122,11 @@ instance Applicative ParseResult where
   ParseFailure msg <*> _ = ParseFailure msg
   ParseSuccess f <*> sth = fmap f sth
 
+instance Arbitrary a => Arbitrary (ParseResult a) where
+  arbitrary = do a <- arbitrary
+                 msg <- arbitrary
+                 elements [ParseSuccess a, ParseFailure msg]
+  coarbitrary _ = id -- TODO: not needed?
 
 -- interface functions
 
