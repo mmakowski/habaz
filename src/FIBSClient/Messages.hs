@@ -1,5 +1,5 @@
 {-|
-This module contains data types representing messages received from FIBS server and functions for working
+This module contains data types representing messages received from FIBS and functions for working
 with them. The message representation is based on <http://www.fibs.com/fibs_interface.html> with some minor 
 changes to make it more practical to represent the stream of messages as a list.
 -}
@@ -7,7 +7,8 @@ module FIBSClient.Messages(
   FIBSMessage(..),
   ParseResult(..),
   parseFIBSMessage,
-  parseFIBSMessages
+  parseFIBSMessages,
+  splitByFirst
 ) where
 import Control.Applicative
 import Data.List
@@ -116,7 +117,7 @@ instance Applicative ParseResult where
   ParseSuccess f <*> sth = fmap f sth
 
 
--- message parsing
+-- interface functions
 
 -- | When applied to a string containing FIBS output yields a (lazy) list of parsed messages.
 parseFIBSMessages :: String  -- ^ the string to parse, typically this will be read from socket connected to FIBS
@@ -137,6 +138,24 @@ parseFIBSMessage str =
   let (first, rest) = firstLineAndRest str 
       (msgNum, restOfLine) = msgNumAndRest first
   in parseLine msgNum (stripCRLF restOfLine) rest
+
+-- | Splits the list of ParseResults by the first ParseSuccess whose content matches the predicate given.
+-- If no elements match the predicate an error is raised.
+splitByFirst :: [ParseResult a]                       -- ^ the list to split
+             -> (a -> Bool)                           -- ^ the predicate to test parsed elements
+             -> ([ParseResult a], a, [ParseResult a]) -- ^ results before the first matching element, 
+                                                      -- first matching element, the rest of the list
+m `splitByFirst` c = splitByFirst' m c [] where
+  splitByFirst' (m@(ParseFailure _):msgs) cond dropped = splitByFirst' msgs cond (m:dropped)
+  splitByFirst' (m@(ParseSuccess msg):msgs) cond dropped = 
+    if cond msg then (reverse dropped, msg, msgs) else splitByFirst' msgs cond (m:dropped)
+
+test_splitByFirstPreservesFailures = 
+  assertEqual ""
+              ([ParseFailure "0", ParseSuccess 1], 2, [ParseFailure "3"])
+              ([ParseFailure "0", ParseSuccess 1, ParseSuccess 2, ParseFailure "3"] `splitByFirst` (== 2))
+
+-- message parsing
 
 parseLine :: Maybe Int -> String -> String -> (ParseResult FIBSMessage, String)
 parseLine Nothing = parseUnprefixedLine
