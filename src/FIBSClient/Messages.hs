@@ -17,9 +17,9 @@ module FIBSClient.Messages(
 ) where
 import Control.Applicative
 import Data.List
-import Data.Maybe
 import Data.Time
 import Test.HUnit
+import TestUtils
 import System.Locale
 
 data RedoubleLimit
@@ -458,7 +458,5 @@ stripCRLF :: String -> String
 stripCRLF str = if "\r\n" `isSuffixOf` str then init (init str) else str
 
 -- helper test functions
-
-toUTCTime str = (fromJust $ parseTime defaultTimeLocale "%s" str)
 
 str `parsesTo` msg = assertEqual "" (ParseSuccess msg, []) (parseFIBSMessage str)

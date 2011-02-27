@@ -1,12 +1,18 @@
+{-|
+A model of Backgammon game.
+-}
 module Backgammon( 
+  -- * Types
   Board,
   Peg,
   Player (..),
+  -- ** Field accessors
+  pegs,
   count,
-  initialBoard,
   owner,
-  pegs
-  ) where
+  -- * Constants
+  initialBoard
+) where
 import Data.Array
 import qualified Data.Map as Map
 
@@ -17,7 +23,7 @@ data GameState
      = Roll { diceOwner :: Player, cubeOwner :: Maybe Player }
      | Move { diceOwner :: Player, cubeOwner :: Maybe Player }
      | Double { diceOwner :: Player }
-     | Won { winner :: Player }
+     | Finished { winner :: Player }
      deriving (Eq, Show)
 
 data Peg = Peg { owner :: Maybe Player, count :: Int }
