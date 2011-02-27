@@ -4,12 +4,15 @@ import Control.Monad
 import Data.Bits
 import Data.Char
 import Data.List
+import Data.Maybe
 import Data.Time
 import Network.Socket hiding (connect, send)
 import qualified Network.Socket (connect)
 import Network.BSD
 import System.IO
 import System.Locale
+import Test.HUnit
+import Test.QuickCheck
 
 
 type Connection = Handle
@@ -107,6 +110,10 @@ data Command
      = Toggle Flag
      deriving (Eq, Show)
 
+instance Test.QuickCheck.Arbitrary Command where
+  arbitrary = elements [Toggle Ready] -- TODO: more examples
+  coarbitrary _ = id -- TODO
+
 data ParseResult a 
      = ParseSuccess a
      | ParseFailure String
@@ -123,16 +130,17 @@ instance Applicative ParseResult where
   ParseSuccess f <*> sth = fmap f sth
 
 
-defaultFibsHost = "fibs.com"
-defaultFibsPort = "4321"
-clipVersion = "1008"
-
 -- message parsing
 
 parseFIBSMessages :: String -> [ParseResult FIBSMessage]
 parseFIBSMessages str = 
   let (msg, rest) = parseFIBSMessage str 
   in (msg : parseFIBSMessages rest)
+
+test_parseFIBSMessagesIsLazy = 
+  assertEqual "parseFIBSMessages is lazy" 
+              [ParseSuccess FailedLogin, ParseSuccess FailedLogin]
+              (take 2 $ parseFIBSMessages $ cycle "login:")
 
 parseFIBSMessage :: String -> (ParseResult FIBSMessage, String)
 parseFIBSMessage str = 
@@ -161,13 +169,39 @@ parseLine (Just n) = case n of
   _ -> \line rest -> (ParseFailure $ "unrecognised message type id " ++ (show n) ++ "; rest of line: '" ++ line ++"'", 
                       rest)
 
+-- failed login
 parseUnprefixedLine "login:" rest = (ParseSuccess FailedLogin, rest)
+-- system message
 parseUnprefixedLine ('*':('*':(' ':msg))) rest = (ParseSuccess (System msg), rest)
+-- empty line
 parseUnprefixedLine "" rest = skip "" rest
+-- free form
 parseUnprefixedLine line rest = (ParseSuccess (FreeForm line), rest)
+
+test_failedLoginParsedCorrectly = 
+  assertEqual "failed login" 
+              (ParseSuccess FailedLogin, []) 
+              (parseFIBSMessage "login:")
+
+test_systemParsedCorrectly =
+  assertEqual "System **"
+              (ParseSuccess (System "You're now ready to invite or join someone."), [])
+              (parseFIBSMessage "** You're now ready to invite or join someone.\r\n")
+
+test_blankLineIsSkipped = 
+  assertEqual "blank line is skipped"
+              (ParseSuccess (System "system message"), [])
+              (parseFIBSMessage "\r\n** system message")
+
+test_freeFormParsedCorrectly =
+  assertEqual "free form"
+              (ParseSuccess (FreeForm "aleks and Ubaretzu start a 1 point match."), [])
+              (parseFIBSMessage "\r\naleks and Ubaretzu start a 1 point match.\r\n")
+              
 
 skip _ rest = parseFIBSMessage rest
 
+-- Welcome
 parseWelcome line rest =
   let [name, lastLogin, lastHost] = words line
   in (Welcome <$> pure name 
@@ -175,6 +209,12 @@ parseWelcome line rest =
               <*> pure lastHost, 
       rest)
 
+test_welcomeParsedCorrectly = 
+  assertEqual "Welcome"
+              (ParseSuccess (Welcome "username" (toUTCTime "1041253132") "1.2.3.4"), [])
+              (parseFIBSMessage "1 username 1041253132 1.2.3.4\r\n")
+
+-- OwnInfo
 parseOwnInfo line rest =
   let [name, allowpip, autoboard, autodouble, automove, away, bell, crawford, 
        double, experience, greedy, moreboards, moves, notify, rating, ratings, ready, 
@@ -202,6 +242,12 @@ parseOwnInfo line rest =
               <*> pure timezone,
       rest)
 
+test_ownInfoParsedCorrectly = 
+  assertEqual "Own Info"
+              (ParseSuccess (OwnInfo "myself" True True False False False False True True 2396 False True False True 3457.85 False False (LimitedTo 0) False False "Australia/Melbourne"), [])
+              (parseFIBSMessage "2 myself 1 1 0 0 0 0 1 1 2396 0 1 0 1 3457.85 0 0 0 0 0 Australia/Melbourne\r\n")
+
+-- MOTD
 parseMOTD _ rest =
   let (motd, rest') = readMOTD "" rest
   in (ParseSuccess $ MOTD motd, rest')
@@ -212,6 +258,37 @@ parseMOTD _ rest =
         ((Just 4), _) -> let (_, rest') = firstLineAndRest rest in (acc, rest')
         _ -> readMOTD (acc ++ first) rest
 
+test_motdParsedCorrectly = 
+  assertEqual "MOTD"
+              (ParseSuccess (MOTD motd), [])
+              (parseFIBSMessage $ "3\r\n" ++ motd ++ "4\r\n\r\n")
+  where 
+    motd = 
+      "+--------------------------------------------------------------------+\r\n\
+      \|                                                                    |\r\n\
+      \| It was a dark and stormy night in Oakland.  Outside, the rain      |\r\n\
+      \| came down in torrents.  Winds of 40MPH+ pounded at the windows,    |\r\n\
+      \| and whipped at trees, power lines, and anyone foolish enough       |\r\n\
+      \| to be outdoors.                                                    |\r\n\
+      \|                                                                    |\r\n\
+      \| In the middle of the night, I was awakened by a loud BEEP BEEP     |\r\n\
+      \| BEEP BEEP.  \"What is that?\" I thought groggily.  Ah!  We've had    |\r\n\
+      \| a power failure, and the computers are running on battery power.   |\r\n\
+      \|                                                                    |\r\n\
+      \| Curious to see how things were working, I crawled out of bed and   |\r\n\
+      \| stumbled downstairs to log in.  To my delight, people were         |\r\n\
+      \| merrily playing backgammon, oblivious to the fact that they had    |\r\n\
+      \| just ridden out a power failure that a few months ago would have   |\r\n\
+      \| shut down the server most ungracefully.                            |\r\n\
+      \|                                                                    |\r\n\
+      \| Thanks to all of the generous FIBSters who bought the UPS and      |\r\n\
+      \| made this possible!  And coming soon, as soon as I can get it      |\r\n\
+      \| built and deployed, a new (more reliable, and maybe faster)        |\r\n\
+      \| server.                                                            |\r\n\
+      \|                                                                    |\r\n\
+      \+--------------------------------------------------------------------+\r\n"
+
+-- WhoInfo
 parseWhoInfo line rest = 
   let [name, opponent, watching, ready, away, rating, experience, idle, 
        login, hostname, client, email] = words line
@@ -229,10 +306,33 @@ parseWhoInfo line rest =
               <*> parseMaybeString email,
       rest)
 
+test_whoInfoParsedCorrectly = 
+  assertEqual "Who Info"
+              (ParseSuccess (WhoInfo "mgnu_advanced" (Just "someplayer") Nothing True False 1912.15 827 8 (toUTCTime "1040515752") "192.168.143.5" (Just "3DFiBs") Nothing), [])
+              (parseFIBSMessage "5 mgnu_advanced someplayer - 1 0 1912.15 827 8 1040515752 192.168.143.5 3DFiBs -")
+
+test_endOfWhoInfoBlockIsSkipped =
+  assertEqual "end of Who Info block is skipped"
+              (ParseSuccess (FreeForm "some message"), [])
+              (parseFIBSMessage "6\r\n\r\nsome message\r\n")
+
+-- Login
 parseLogin = parseGenericNameMsg Login
 
+test_loginParsedCorrectly =
+  assertEqual "Login"
+              (ParseSuccess (Login "someplayer" "someplayer logs in."), [])
+              (parseFIBSMessage "7 someplayer someplayer logs in.\r\n")
+
+-- Logout
 parseLogout = parseGenericNameMsg Logout
 
+test_logoutParsedCorrectly = 
+  assertEqual "Logout"
+              (ParseSuccess (Logout "someplayer" "someplayer drops connection."), [])
+              (parseFIBSMessage "8 someplayer someplayer drops connection.\r\n")
+
+-- Message
 parseMessage line rest =
   let (from, line') = firstWordAndRest line
       (time, msg) = firstWordAndRest line'
@@ -241,19 +341,63 @@ parseMessage line rest =
               <*> pure msg,
       rest)
 
+test_messageParsedCorrectly = 
+  assertEqual "Message"
+              (ParseSuccess (Message "someplayer" (toUTCTime "1041253132") "I'll log in at 10pm if you want to finish that game."), [])
+              (parseFIBSMessage "9 someplayer 1041253132 I'll log in at 10pm if you want to finish that game.\r\n")
+
+-- MessageDelivered
 parseMessageDelivered name rest = 
   (ParseSuccess (MessageDelivered name), rest)
 
+test_messageDeliveredParsedCorrectly = 
+  assertEqual "Message Delivered"
+              (ParseSuccess (MessageDelivered "someplayer"), [])
+              (parseFIBSMessage "10 someplayer\r\n")
+              
+-- MessageSaved
 parseMessageSaved name rest =
   (ParseSuccess (MessageSaved name), rest)
 
+test_messageSavedParsedCorrectly = 
+  assertEqual "Message Saved"
+              (ParseSuccess (MessageSaved "someplayer"), [])
+              (parseFIBSMessage "11 someplayer\r\n")
+              
+-- Says
 parseSays = parseGenericNameMsg Says
 
+test_saysParsedCorrectly = 
+  assertEqual "Says"
+              (ParseSuccess (Says "someplayer" "Do you want to play a game?"), [])
+              (parseFIBSMessage "12 someplayer Do you want to play a game?\r\n")
+
+-- Shouts
 parseShouts = parseGenericNameMsg Shouts
 
+test_shoutsParsedCorrectly = 
+  assertEqual "Shouts"
+              (ParseSuccess (Shouts "someplayer" "Anybody for a 5 point match?"), [])
+              (parseFIBSMessage "13 someplayer Anybody for a 5 point match?\r\n")
+
+-- Whispers
 parseWhispers = parseGenericNameMsg Whispers
 
+test_whispersParsedCorrectly = 
+  assertEqual "Whispers"
+              (ParseSuccess (Whispers "someplayer" "I think he is using loaded dice  :-)"), [])
+              (parseFIBSMessage "14 someplayer I think he is using loaded dice  :-)\r\n")
+
+-- Kibitzes
 parseKibitzes = parseGenericNameMsg Kibitzes
+
+test_kibitzesParsedCorrectly = 
+  assertEqual "Kibitzes"
+              (ParseSuccess (Kibitzes "someplayer" "G'Day and good luck from Hobart, Australia."), [])
+              (parseFIBSMessage "15 someplayer G'Day and good luck from Hobart, Australia.\r\n")
+
+
+-- helper parsing functions
 
 parseGenericNameMsg cons line rest =  
   let (name, msg) = firstWordAndRest line
@@ -283,15 +427,6 @@ parseUTCTime :: String -> ParseResult UTCTime
 parseUTCTime str = case parseTime defaultTimeLocale "%s" str of
   Just time -> ParseSuccess time
   Nothing -> ParseFailure $ "unable to parse '" ++ str ++ "' as UTCTime"
-
-
--- command formatting
-  
-formatCommand :: Command -> String
-formatCommand (Toggle flag) = "toggle " ++ (formatFlag flag)
-
-formatFlag :: Flag -> String
-formatFlag = map toLower . show
 
 
 -- helper string splitting functions
@@ -331,8 +466,15 @@ findPrefix (prefix:prefixes) str =
 stripCRLF :: String -> String
 stripCRLF str = if "\r\n" `isSuffixOf` str then init (init str) else str
 
+-- command formatting
+  
+formatCommand :: Command -> String
+formatCommand (Toggle flag) = "toggle " ++ (formatFlag flag)
 
+prop_formatCommandToggleFlag cmd@(Toggle flag) = "toggle " ++ (map toLower $ show flag) == formatCommand cmd
 
+formatFlag :: Flag -> String
+formatFlag = map toLower . show
 
 -- communication primitives
 
@@ -406,6 +548,9 @@ sendCommand conn cmd =
 
 -- experiments in progress:
 
+defaultFibsHost = "fibs.com"
+defaultFibsPort = "4321"
+clipVersion = "1008"
 
 test = 
   do conn <- connect defaultFibsHost defaultFibsPort
@@ -441,5 +586,45 @@ playWithMmakowski =
     isSystem _ = False
     isFreeForm (FreeForm _) = True
     isFreeForm _ = False
+
+
+-- tests
+
+testAccount = "habaztest_a"
+testPassword = "habaztest"
+
+-- Note: this test will normally be disabled because there is no way to remove 
+-- a test account from FIBS once it was created. If other tests fail because
+-- the test account does not exist then enable this test to re-create the account
+atest_createAccount = 
+  do conn <- connect defaultFibsHost defaultFibsPort
+     loginStatus <- login conn "habaz-test" testAccount testPassword
+     result <- createTestAccount loginStatus conn
+     disconnect conn
+     return result
+  where
+    createTestAccount (LoginFailure "invalid login details") _ = assertBool "TODO" False
+    createTestAccount (LoginFailure reason) _ = assertFailure reason
+    createTestAccount LoginSuccess conn = 
+      do
+        logout conn
+        assertFailure $ testAccount ++ " is already a valid FIBS account, can't test creation"
+    
+{-
+test_accountCreation = 
+  do conn <- connect defaultFibsHost defaultFibsPort
+     --readUntil "login:" conn
+     send conn "guest\n"
+     str <- readUntil "!!!" conn
+     -- putStr str
+     send conn "bye\n"
+     disconnect conn
+     return $ assertBool "not logged in as guest" $ isInfixOf "You just logged in as guest" str
+
+-}
+
+-- helper test functions
+toUTCTime str = (fromJust $ parseTime defaultTimeLocale "%s" str)
+
 
 
