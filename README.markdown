@@ -4,7 +4,7 @@ Habaz
 Building
 --------
 
-1. Set up Haskell Platform (or ghc+cabal)
+1. Set up [Haskell Platform](http://hackage.haskell.org/platform/) (works with 2010.2.0.0, don't know about other versions) or ghc+cabal
 2. install [wxHaskell](http://haskell.org/haskellwiki/WxHaskell/Building).
 4. run `cabal build`
 
@@ -22,7 +22,9 @@ Note that `Setup.hs` has a hard-coded version of QuickCheck 2 to hide. This migh
 
 TODO: why `cabal test` doesn't do anything?
 
-_Interactive testing_: load a module in `ghci` and run functions from the console
+_Interactive testing_: 
+
+Load a module in `ghci` and run functions from the console. You might need to hide QuickCheck 2 package: `:set -hide-package QuickCheck-2.1.1.1` so that QuickCheck 1 is used.
 
 Other Docs
 ----------
