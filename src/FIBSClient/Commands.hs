@@ -3,8 +3,10 @@ This module contains data types representing commands sent to FIBS and functions
 on <http://www.fibs.com/fibs_interface.html>.
 -}
 module FIBSClient.Commands (
+  -- * Types
   FIBSCommand(..),  
   Flag(..),
+  -- * Functions
   formatCommand
 ) where
 import Data.Char

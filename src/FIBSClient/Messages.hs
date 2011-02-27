@@ -4,10 +4,15 @@ with them. The message representation is based on <http://www.fibs.com/fibs_inte
 changes to make it more practical to represent the stream of messages as a list.
 -}
 module FIBSClient.Messages( 
+  -- * Types
   FIBSMessage(..),
   ParseResult(..),
+  RedoubleLimit (..),
+  -- * Functions
+  -- ** Parsing
   parseFIBSMessage,
   parseFIBSMessages,
+  -- ** Message list operations
   splitByFirst
 ) where
 import Control.Applicative

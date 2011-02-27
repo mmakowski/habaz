@@ -2,15 +2,18 @@
 A high-level interface to FIBS. 
 -}
 module FIBSClient(
+  -- * Types
   FIBSCommand (..),
   Connection,
   FIBSMessage (..),
   Flag (..),
   ParseResult (..),
+  -- * Constants
   clipVersion,
-  connect,
   defaultFIBSHost,
   defaultFIBSPort,
+  -- * Functions
+  connect,
   disconnect,
   login,
   logout,
