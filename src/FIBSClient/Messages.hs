@@ -15,10 +15,12 @@ module FIBSClient.Messages(
   -- ** Message predicates
   isFreeForm,
   isSystem,
+  isReadyOn,
   isOwnInfo,
   isWhoInfo,
   -- ** Message list operations
-  splitByFirst
+  splitByFirst,
+  splitByFirstWithLimit
 ) where
 import Control.Applicative
 import Data.List
@@ -36,7 +38,11 @@ data RedoubleLimit
 data FIBSMessage 
      = LoginPrompt
      | FreeForm String
+       -- | System messages are ones prefixed with two asterisks, except for special cases which are
+       -- interpreted further, like 'ReadyOn' etc.
      | System { message :: String }
+     | ReadyOn
+     | ReadyOff
      | Welcome { name :: String
                , lastLogin :: UTCTime
                , lastHost :: String 
@@ -171,12 +177,41 @@ test_splitByFirstPreservesFailures =
               ([ParseFailure "0", ParseSuccess 1], 2, [ParseFailure "3"])
               ([ParseFailure "0", ParseSuccess 1, ParseSuccess 2, ParseFailure "3"] `splitByFirst` (== 2))
 
+-- | Like 'splitByFirst', but with a limit on how many entries to check for an entry matching
+-- the predicate before giving up. Returns Nothing if a matching entry has not been found within
+-- the first n entries.
+splitByFirstWithLimit :: [ParseResult a]  -- ^ the list to split
+                      -> (a -> Bool)      -- ^ the predicate to test elements
+                      -> Int              -- ^ the limit of elements to check
+                      -> Maybe ([ParseResult a], a, [ParseResult a]) -- ^ 'Just' result, as in 'splitByFirst', or
+                                                                     -- 'Nothing' if no matching entry found 
+                                                                     -- within limit
+splitByFirstWithLimit m c limit = splitByFirstWithLimit' m c limit [] where
+  splitByFirstWithLimit' _ _ 0 _ = Nothing
+  splitByFirstWithLimit' (m@(ParseFailure _):msgs) cond limit dropped = 
+    splitByFirstWithLimit' msgs cond (limit - 1) (m:dropped)
+  splitByFirstWithLimit' (m@(ParseSuccess msg):msgs) cond limit dropped =     
+    if cond msg then Just (reverse dropped, msg, msgs) 
+    else splitByFirstWithLimit' msgs cond (limit - 1) (m:dropped)
+    
+test_splitByFirstWithLimitStopsAtLimit =
+  assertEqual "" Nothing (splitByFirstWithLimit [ps 1, ps 2, ps 3, ps 4] (== 3) 2)
+  where ps = ParseSuccess
 
+test_splitByFirstWithLimitFindsElementAtLimit =
+  assertEqual "" 
+              (Just ([ps 1, ps 2], 3, [ps 4]))
+              (splitByFirstWithLimit [ps 1, ps 2, ps 3, ps 4] (== 3) 3)
+  where ps = ParseSuccess
+        
 -- message predicates  
+
 isFreeForm (FreeForm _) = True
 isFreeForm _ = False
 isSystem (System _) = True
 isSystem _ = False
+isReadyOn ReadyOn = True
+isReadyOn _ = False
 isOwnInfo (OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = True
 isOwnInfo _ = False
 isWhoInfo (WhoInfo _ _ _ _ _ _ _ _ _ _ _ _) = True
@@ -208,7 +243,12 @@ parseLine (Just n) = case n of
 -- failed login
 parseUnprefixedLine "login:" rest = (ParseSuccess LoginPrompt, rest)
 -- system message
-parseUnprefixedLine ('*':('*':(' ':msg))) rest = (ParseSuccess (System msg), rest)
+parseUnprefixedLine ('*':('*':(' ':msg))) rest = (ParseSuccess (recognise msg), rest)
+  where 
+    recognise msg
+      | msg == "You're now ready to invite or join someone." = ReadyOn
+      | msg == "You're now refusing to play with someone." = ReadyOff
+      | otherwise = System msg
 -- empty line
 parseUnprefixedLine "" rest = skip "" rest
 -- free form
@@ -220,10 +260,14 @@ test_loginPromptParsedCorrectly =
               (parseFIBSMessage "login:")
 
 test_systemParsedCorrectly =
-  assertEqual "System **"
-              (ParseSuccess (System "You're now ready to invite or join someone."), [])
-              (parseFIBSMessage "** You're now ready to invite or join someone.\r\n")
+  "** Some system message.\r\n" `parsesTo` (System "Some system message.")
 
+test_readyOnParsedCorrectly =
+  "** You're now ready to invite or join someone.\r\n" `parsesTo` ReadyOn
+  
+test_readyOffParsedCorrectly = 
+  "** You're now refusing to play with someone.\r\n" `parsesTo` ReadyOff
+  
 test_blankLineIsSkipped = 
   assertEqual "blank line is skipped"
               (ParseSuccess (System "system message"), [])

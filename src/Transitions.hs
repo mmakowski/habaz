@@ -5,9 +5,9 @@ module Transitions(
   login,
   transition
 ) where
-import FIBSClient hiding (login, Flag (..))
-import qualified FIBSClient (login, Flag (..))
-import FIBSClient.Messages (splitByFirst, isSystem, isOwnInfo, isWhoInfo)
+import FIBSClient hiding (login, logout, Flag (..))
+import qualified FIBSClient (login, logout, Flag (..))
+import FIBSClient.Messages (splitByFirst, splitByFirstWithLimit, isReadyOn, isOwnInfo, isWhoInfo)
 import Session
 import System.IO
 import System.IO.Error
@@ -43,7 +43,7 @@ login host port userName password s@(LoggedOut es) = connectAndLogin `catch` err
     errorHandler e = logErrorIO ("error connecting to " ++ host ++ ":" ++ port) s
 login _ _ _ _ s = logErrorIO ("unable to login in " ++ (stateName s) ++ " state") s
 
-test_loginUnsuccesfulConnectLogsError =
+slowtest_loginUnsuccesfulConnectLogsError =
   do s <- login "wronghost" "1234" "u" "p" initialSessionState
      assertEqual "" (initialSessionState `withErrors` ["error connecting to wronghost:1234"]) s
 test_loginWrongStateLogsError = 
@@ -51,7 +51,7 @@ test_loginWrongStateLogsError =
      let s = (NotReady conn [] [])
      s' <- testLogin s
      assertEqual "" ["unable to login in NotReady state"] (errors s')
-test_loginSuccessTNotReady =
+slowtest_loginSuccessTNotReady =
   do setReadyToTrue
      s' <- testLogin initialSessionState
      case s' of
@@ -65,12 +65,9 @@ test_loginSuccessTNotReady =
          let (_, ownInfo, msgs') = msgs `splitByFirst` isOwnInfo
          if not $ ready ownInfo
            then do sendCommand conn (Toggle FIBSClient.Ready) 
-                   let (_, system, msgs'') = msgs' `splitByFirst` isSystem
-                   -- TODO: make it a separate message constructor
-                   if system == (System "You're now ready to invite or join someone.") 
-                     then return ()
-                     else do disconnect conn
-                             assertFailure $ "unexpected system message: " ++ (show system)
+                   case splitByFirstWithLimit msgs' isReadyOn 1000 of
+                     Nothing -> disconnectAndFail conn "no ReadyOn found within first 1000 messages"
+                     Just _  -> return ()
            else return ()
          disconnect conn
     verifyNotReady (NotReady _ msgs _) = 
@@ -81,7 +78,30 @@ test_loginSuccessTNotReady =
            then do let (_, wi', msgs'') = msgs' `splitByFirst` myWhoInfo
                    assertBool "ready after login" (not $ ready wi')
            else return ()
-    myWhoInfo m = isWhoInfo m && (name m == testAccount)              
+    myWhoInfo m = isWhoInfo m && (name m == testAccount)
+    disconnectAndFail conn msg = 
+      do disconnect conn
+         assertFailure msg
+
+
+-- | Logs out and disconnects from FIBS.
+logout :: SessionStateTransition
+logout s@(LoggedOut _) = logErrorIO "unable to logout in LoggedOut state" s
+logout s = 
+  do let conn = connection s
+     FIBSClient.logout conn
+     disconnect conn
+     return $ LoggedOut $ errors s
+
+test_logoutWrongStateLogsError =
+  do s <- logout initialSessionState
+     assertEqual "" ["unable to logout in LoggedOut state"] (errors s)
+slowtest_logoutPreservesErrors =   
+  do s <- testLogin initialSessionState
+     s' <- logout (s `withErrors` es)
+     assertEqual "" (LoggedOut es) s'
+  where es = ["error 1", "error 2"]
+  
 
 -- | Translates message parse result to session transition.
 transition :: ParseResult FIBSMessage -> SessionStateTransition
