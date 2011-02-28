@@ -174,13 +174,6 @@ playWithMmakowski =
          putStrLn (show system)
      logout conn
      disconnect conn
-  where
-    isOwnInfo (OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = True
-    isOwnInfo _ = False
-    isSystem (System _) = True
-    isSystem _ = False
-    isFreeForm (FreeForm _) = True
-    isFreeForm _ = False
 
 
 -- tests

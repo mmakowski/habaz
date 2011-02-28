@@ -12,6 +12,11 @@ module FIBSClient.Messages(
   -- ** Parsing
   parseFIBSMessage,
   parseFIBSMessages,
+  -- ** Message predicates
+  isFreeForm,
+  isSystem,
+  isOwnInfo,
+  isWhoInfo,
   -- ** Message list operations
   splitByFirst
 ) where
@@ -165,6 +170,17 @@ test_splitByFirstPreservesFailures =
   assertEqual ""
               ([ParseFailure "0", ParseSuccess 1], 2, [ParseFailure "3"])
               ([ParseFailure "0", ParseSuccess 1, ParseSuccess 2, ParseFailure "3"] `splitByFirst` (== 2))
+
+
+-- message predicates  
+isFreeForm (FreeForm _) = True
+isFreeForm _ = False
+isSystem (System _) = True
+isSystem _ = False
+isOwnInfo (OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = True
+isOwnInfo _ = False
+isWhoInfo (WhoInfo _ _ _ _ _ _ _ _ _ _ _ _) = True
+isWhoInfo _ = False
 
 -- message parsing
 
