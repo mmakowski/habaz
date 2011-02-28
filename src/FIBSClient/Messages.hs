@@ -29,7 +29,7 @@ data RedoubleLimit
      deriving (Eq, Show)
 
 data FIBSMessage 
-     = FailedLogin
+     = LoginPrompt
      | FreeForm String
      | System { message :: String }
      | Welcome { name :: String
@@ -139,7 +139,7 @@ parseFIBSMessages str =
 
 test_parseFIBSMessagesIsLazy = 
   assertEqual "parseFIBSMessages is lazy" 
-              [ParseSuccess FailedLogin, ParseSuccess FailedLogin]
+              [ParseSuccess LoginPrompt, ParseSuccess LoginPrompt]
               (take 2 $ parseFIBSMessages $ cycle "login:")
 
 -- | Parses a single message from given string.
@@ -190,7 +190,7 @@ parseLine (Just n) = case n of
                       rest)
 
 -- failed login
-parseUnprefixedLine "login:" rest = (ParseSuccess FailedLogin, rest)
+parseUnprefixedLine "login:" rest = (ParseSuccess LoginPrompt, rest)
 -- system message
 parseUnprefixedLine ('*':('*':(' ':msg))) rest = (ParseSuccess (System msg), rest)
 -- empty line
@@ -198,9 +198,9 @@ parseUnprefixedLine "" rest = skip "" rest
 -- free form
 parseUnprefixedLine line rest = (ParseSuccess (FreeForm line), rest)
 
-test_failedLoginParsedCorrectly = 
-  assertEqual "failed login" 
-              (ParseSuccess FailedLogin, []) 
+test_loginPromptParsedCorrectly = 
+  assertEqual "login prompt" 
+              (ParseSuccess LoginPrompt, []) 
               (parseFIBSMessage "login:")
 
 test_systemParsedCorrectly =

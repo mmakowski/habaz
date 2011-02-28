@@ -1,5 +1,18 @@
 {-|
-A high-level interface to FIBS. 
+A high-level interface to FIBS. Usage:
+
+* call 'connect' to establish a connection
+
+* call 'login' to log in
+
+* call 'readMessages' to obtain a list of parsed FIBS messages. After this call the 'Connection' value should 
+not be used for reading, the only functions to which it should be passed are 'sendCommand', 'logout' and 
+'disconnect'.
+
+* call 'logout' to log out; this is optional, since disconnecting will log you out anyway, and you should not
+log in again using the same connection because FIBS behaves strangely if you do.
+
+* call 'disconnect' to terminate connection.
 -}
 module FIBSClient(
   -- * Types
@@ -7,6 +20,7 @@ module FIBSClient(
   Connection,
   FIBSMessage (..),
   Flag (..),
+  LoginStatus (..),
   ParseResult (..),
   -- * Constants
   clipVersion,
@@ -18,7 +32,9 @@ module FIBSClient(
   login,
   logout,
   readMessages,
-  sendCommand
+  sendCommand,
+  -- * Test Helpers
+  dummyConnection
 ) where
 import FIBSClient.Commands
 import FIBSClient.Messages
@@ -78,7 +94,7 @@ login conn clientname username password =
      line <- readUntil ["\n", "login:"] conn
      return $ case fst (parseFIBSMessage line) of
        ParseFailure msg             -> LoginFailure $ "parse error: " ++ msg
-       ParseSuccess FailedLogin     -> LoginFailure "invalid login details"
+       ParseSuccess LoginPrompt     -> LoginFailure "invalid login details"
        ParseSuccess (Welcome _ _ _) -> LoginSuccess
      
 -- | Logs out from FIBS.
@@ -114,7 +130,7 @@ readUntil termStrs conn = liftM reverse $ loop []
     isTerminated _ [] = False
     loop acc = do
       input <- hGetChar conn
-      putStr $ if isTerminated (input:acc) rTermStrs then reverse (input:acc) else ""
+      --putStr $ if isTerminated (input:acc) rTermStrs then reverse (input:acc) else ""
       (if isTerminated (input:acc) rTermStrs then return else loop) (input:acc)
       
 readLine :: Connection -> IO String
@@ -125,6 +141,13 @@ send conn cmd =
   do hPutStrLn conn cmd
      hFlush conn
 
+-- test helpers
+
+-- TODO: create connection value without actually connecting to FIBS
+dummyConnection = 
+  do conn <- connect defaultFIBSHost defaultFIBSPort
+     disconnect conn
+     return conn
 
 -- experiments in progress:
 
