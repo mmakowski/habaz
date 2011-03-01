@@ -21,21 +21,26 @@ module Session(
   logError,
   withErrors
 ) where
-import FIBSClient (Connection, ParseResult, FIBSMessage, dummyConnection)
+import FIBSClient (Connection, dummyConnection)
 import Test.HUnit hiding (errors)
 
 class State a where
   stateName :: a -> String
 
 data SessionState
+     -- | Client is disconnected from the server
      = LoggedOut { errors :: [String] }
+     -- | Client is connected and logged in but ready state has not been recognised yet  
+     | LoggedIn { connection :: Connection
+                , errors :: [String]
+                }
+     -- | The player is refusing games and can't invite
      | NotReady { connection :: Connection
-                , messages :: [ParseResult FIBSMessage]
                   -- TODO: players
                 , errors :: [String]
                 }
+     -- | The player is ready to play -- can invite and receive invitations
      | Ready { connection :: Connection
-             , messages :: [ParseResult FIBSMessage]               
                -- TODO: players
                -- TODO: invitations
              , errors :: [String]
@@ -46,8 +51,9 @@ data SessionState
 instance Session.State SessionState where
   stateName s = case s of
     LoggedOut _     -> "LoggedOut"
-    NotReady _ _ _  -> "NotReady"
-    Ready _ _ _     -> "Ready"
+    LoggedIn _ _    -> "LoggedIn"
+    NotReady _ _  -> "NotReady"
+    Ready _ _     -> "Ready"
     
 -- constants
 
@@ -59,20 +65,23 @@ initialSessionState = LoggedOut []
 logError :: String -> SessionState -> SessionState
 logError e st = case st of
   (LoggedOut es)     -> LoggedOut (es ++ [e])
-  (NotReady c m es)  -> NotReady c m (es ++ [e])
-  (Ready c m es)     -> Ready c m (es ++ [e])
+  (LoggedIn c es)    -> LoggedIn c (es ++ [e])  
+  (NotReady c es)  -> NotReady c (es ++ [e])
+  (Ready c es)     -> Ready c (es ++ [e])
 
 test_logErrorAppendsAnError =
   do assertErrorAppended "LoggedOut" (LoggedOut e1)
      conn <- dummyConnection
-     assertErrorAppended "NotReady" (NotReady conn [] e1)
-     assertErrorAppended "Ready" (Ready conn [] e1)
+     assertErrorAppended "LoggedIn" (LoggedIn conn e1)     
+     assertErrorAppended "NotReady" (NotReady conn e1)
+     assertErrorAppended "Ready" (Ready conn e1)
   where
     e1 = ["error 1"]
     assertErrorAppended stDesc st = assertEqual stDesc ["error 1", "error 2"] (errors (logError "error 2" st))
 
 
 (LoggedOut _) `withErrors` es = LoggedOut es
-(NotReady c m _) `withErrors` es = NotReady c m es
-(Ready c m _) `withErrors` es = Ready c m es
+(LoggedIn c _) `withErrors` es = LoggedIn c es
+(NotReady c _) `withErrors` es = NotReady c es
+(Ready c _) `withErrors` es = Ready c es
 

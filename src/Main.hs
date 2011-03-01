@@ -6,6 +6,8 @@ import Control.Monad
 import Data.Array
 import FIBSClient
 import Graphics.UI.WX
+import Session
+import Transitions
 
 startWidth, startHeight :: Int
 startWidth = 500
@@ -13,21 +15,35 @@ startHeight = 500
 
 main :: IO ()
 main = 
-  do msgsTV <- newTVarIO []
-     forkIO $ commThread msgsTV
-     start (habazWindow msgsTV)
+  do sessionTV <- newTVarIO initialSessionState
+     msgsTV <- newTVarIO []
+     forkIO $ readerThread sessionTV msgsTV
+     start (habazWindow sessionTV msgsTV)
 
-commThread msgsTV = forever $
-  do atomically $ writeTVar msgsTV ["dupa"]
-     
-habazWindow :: TVar [String] -> IO ()
-habazWindow msgsTV =
+readerThread sessionTV msgsTV = forever $
+  do s <- readTVarIO sessionTV
+     putStr "" -- TODO: without this IO action the app hangs...
+     case s of
+       LoggedIn conn _ -> do incoming <- readMessages conn
+                             incomingTV <- newTVarIO incoming -- TODO: doesn't have to be TVar, regular Var would do
+                             readLoop incomingTV msgsTV
+       _               -> return ()
+  where
+    readLoop inpTV outpTV = forever $ do 
+      (msg:msgs) <- readTVarIO inpTV
+      append outpTV msg
+      atomically $ writeTVar inpTV msgs
+    append outpTV msg = atomically $ do
+      outp <- readTVar outpTV
+      writeTVar outpTV $ outp ++ [msg]
+    
+habazWindow :: TVar SessionState -> TVar [ParseResult FIBSMessage] -> IO ()
+habazWindow stateTV msgsTV =
   do f <- frame [text := "Habaz"]
-     state <- variable [value := "TODO: game state"]
      p <- panel f [on paint := paintBoard initialBoard,
                    on click := \p -> infoDialog f "dupa" (show p)]
-     t <- timer f [interval := 5000,
-                   on command := gameCycle msgsTV state f]
+     t <- timer f [interval := 50,
+                   on command := gameCycle msgsTV stateTV f]
      set f [layout := minsize (sz startWidth startHeight) $ widget p,
             on resize := do newSize <- get f clientSize
                             set p [outerSize := newSize]
@@ -36,21 +52,26 @@ habazWindow msgsTV =
 barWidthRatio = 0.08
 homeWidthRatio = 0.08
 
-gameCycle msgsTV state f = 
-  do msgs <- readAndReset msgsTV
-     updateState msgs state
-     msg <- get state value
-     infoDialog f "update" msg
+gameCycle msgsTV stateTV f = do 
+  msgs <- readAndReset msgsTV
+  state <- readTVarIO stateTV
+  state' <- updateState state msgs f
+  atomically $ writeTVar stateTV state'
+  -- TODO: stateActions
+  -- infoDialog f "update" msg
   where
-    readAndReset msgsTV = atomically $
-      do msgs <- readTVar msgsTV
-         writeTVar msgsTV []
-         return msgs
+    readAndReset msgsTV = atomically $ do 
+      msgs <- readTVar msgsTV
+      writeTVar msgsTV []
+      return msgs
          
-updateState [] state = return ()
-updateState (h:t) state = 
-  do set state [value := h]
-     updateState t state
+updateState s [] _ = return s
+updateState s (h:t) f = do
+  infoDialog f "msg" (show h)
+  s' <- transition h s
+  updateState s' t f
+
+-- menu :: IO (Menu ())
 
 paintBoard :: Board -> DC a -> Rect -> IO ()
 paintBoard board dc viewArea = 

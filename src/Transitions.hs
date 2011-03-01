@@ -33,13 +33,7 @@ login host port userName password s@(LoggedOut es) = connectAndLogin `catch` err
          case loginStatus of
            LoginFailure e -> do disconnect conn
                                 logErrorIO e s
-           LoginSuccess   -> do msgs <- readMessages conn
-                                ensureNotReady conn msgs
-    ensureNotReady conn msgs = 
-      do let (_, ownInfo, msgs') = msgs `splitByFirst` isOwnInfo
-         if ready ownInfo then sendCommand conn (Toggle FIBSClient.Ready) else putStrLn "not ready!"
-         -- TODO: verify that is not ready
-         return $ NotReady conn msgs' es
+           LoginSuccess   -> do return $ LoggedIn conn es
     errorHandler e = logErrorIO ("error connecting to " ++ host ++ ":" ++ port) s
 login _ _ _ _ s = logErrorIO ("unable to login in " ++ (stateName s) ++ " state") s
 
@@ -48,40 +42,14 @@ slowtest_loginUnsuccesfulConnectLogsError =
      assertEqual "" (initialSessionState `withErrors` ["error connecting to wronghost:1234"]) s
 test_loginWrongStateLogsError = 
   do conn <- dummyConnection
-     let s = (NotReady conn [] [])
+     let s = (NotReady conn [])
      s' <- testLogin s
      assertEqual "" ["unable to login in NotReady state"] (errors s')
-slowtest_loginSuccessTNotReady =
-  do setReadyToTrue
-     s' <- testLogin initialSessionState
+slowtest_loginSuccessTLoggedIn =
+  do s' <- testLogin initialSessionState
      case s' of
-       NotReady _ _ [] -> verifyNotReady s'
-       _               -> assertFailure $ "unexpected state after login: " ++ (show s')
-  where
-    setReadyToTrue = 
-      do conn <- connect defaultFIBSHost defaultFIBSPort
-         FIBSClient.login conn "habaztest" testAccount testPassword
-         msgs <- readMessages conn
-         let (_, ownInfo, msgs') = msgs `splitByFirst` isOwnInfo
-         if not $ ready ownInfo
-           then do sendCommand conn (Toggle FIBSClient.Ready) 
-                   case splitByFirstWithLimit msgs' isReadyOn 1000 of
-                     Nothing -> disconnectAndFail conn "no ReadyOn found within first 1000 messages"
-                     Just _  -> return ()
-           else return ()
-         disconnect conn
-    verifyNotReady (NotReady _ msgs _) = 
-      do let (_, wi, msgs') = msgs `splitByFirst` myWhoInfo
-         -- depending on timing, the first info might show ready = True if it was received before the toggle
-         -- if that's the case then we should receive a second whoInfo with ready = False
-         if ready wi
-           then do let (_, wi', msgs'') = msgs' `splitByFirst` myWhoInfo
-                   assertBool "ready after login" (not $ ready wi')
-           else return ()
-    myWhoInfo m = isWhoInfo m && (name m == testAccount)
-    disconnectAndFail conn msg = 
-      do disconnect conn
-         assertFailure msg
+       LoggedIn _ [] -> return () 
+       _             -> assertFailure $ "unexpected state after login: " ++ (show s')
 
 
 -- | Logs out and disconnects from FIBS.
