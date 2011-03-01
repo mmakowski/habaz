@@ -4,7 +4,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
 import Data.Array
-import FIBSClient
+import FIBSClient hiding (login)
 import Graphics.UI.WX
 import Session
 import Transitions
@@ -15,50 +15,54 @@ startHeight = 500
 
 main :: IO ()
 main = 
-  do sessionTV <- newTVarIO initialSessionState
-     msgsTV <- newTVarIO []
+  do sessionTV <- newTMVarIO initialSessionState -- TODO: this should be a TMVar
+     msgsTV <- newTVarIO [] -- TODO: this should be a TChan
      forkIO $ readerThread sessionTV msgsTV
-     start (habazWindow sessionTV msgsTV)
+     start $ habazWindow sessionTV msgsTV
 
-readerThread sessionTV msgsTV = forever $
-  do s <- readTVarIO sessionTV
-     putStr "" -- TODO: without this IO action the app hangs...
-     case s of
-       LoggedIn conn _ -> do incoming <- readMessages conn
-                             incomingTV <- newTVarIO incoming -- TODO: doesn't have to be TVar, regular Var would do
-                             readLoop incomingTV msgsTV
-       _               -> return ()
+readerThread :: TMVar SessionState -> TVar [ParseResult FIBSMessage] -> IO ()
+readerThread sessionTMV msgsTV = forever $ do 
+  s <- atomically $ readTMVar sessionTMV
+  putStr "" -- TODO: without this IO action the app hangs...
+  case s of
+    LoggedIn conn _ -> do incoming <- readMessages conn
+                          incomingTV <- newTVarIO incoming -- TODO: doesn't have to be TVar, regular Var would do
+                          readLoop incomingTV msgsTV
+    _               -> return ()
   where
     readLoop inpTV outpTV = forever $ do 
       (msg:msgs) <- readTVarIO inpTV
+      putStrLn $ "read: " ++ (show msg) -- TODO: without this there is a stack overflow
       append outpTV msg
       atomically $ writeTVar inpTV msgs
     append outpTV msg = atomically $ do
       outp <- readTVar outpTV
       writeTVar outpTV $ outp ++ [msg]
     
-habazWindow :: TVar SessionState -> TVar [ParseResult FIBSMessage] -> IO ()
-habazWindow stateTV msgsTV =
-  do f <- frame [text := "Habaz"]
-     p <- panel f [on paint := paintBoard initialBoard,
-                   on click := \p -> infoDialog f "dupa" (show p)]
-     t <- timer f [interval := 50,
-                   on command := gameCycle msgsTV stateTV f]
-     set f [layout := minsize (sz startWidth startHeight) $ widget p,
-            on resize := do newSize <- get f clientSize
-                            set p [outerSize := newSize]
-                            repaint p]
+habazWindow :: TMVar SessionState -> TVar [ParseResult FIBSMessage] -> IO ()
+habazWindow stateTMV msgsTV =
+  do f <- frame [ text := "Habaz" ]
+     p <- panel f [ on paint := paintBoard initialBoard
+                  , on click := \p -> infoDialog f "dupa" (show p)
+                  ]
+     t <- timer f [ interval := 1000
+                  , on command := gameCycle msgsTV stateTMV f
+                  ]
+     menu <- createMenuBar stateTMV
+     set f [ menuBar := menu
+           , layout := minsize (sz startWidth startHeight) $ widget p
+           , on resize := do newSize <- get f clientSize
+                             set p [outerSize := newSize]
+                             repaint p
+           ]
 
-barWidthRatio = 0.08
-homeWidthRatio = 0.08
-
-gameCycle msgsTV stateTV f = do 
+gameCycle msgsTV stateTMV f = do 
   msgs <- readAndReset msgsTV
-  state <- readTVarIO stateTV
+  state <- atomically $ takeTMVar stateTMV
   state' <- updateState state msgs f
-  atomically $ writeTVar stateTV state'
-  -- TODO: stateActions
-  -- infoDialog f "update" msg
+  putStrLn $ "state after update: " ++ (show state')
+  atomically $ putTMVar stateTMV state'
+  -- TODO: state UI actions
   where
     readAndReset msgsTV = atomically $ do 
       msgs <- readTVar msgsTV
@@ -67,11 +71,28 @@ gameCycle msgsTV stateTV f = do
          
 updateState s [] _ = return s
 updateState s (h:t) f = do
-  infoDialog f "msg" (show h)
+  --infoDialog f "msg" (show h)
   s' <- transition h s
   updateState s' t f
 
--- menu :: IO (Menu ())
+createMenuBar :: TMVar SessionState -> IO [Menu ()]
+createMenuBar stateTMV = do
+  session <- menuPane [text := "&Session"]
+  mLogin <- menuItem session [ text := "Log &In..." 
+                             , on command := doLogin
+                             ]
+  return [session]
+  where
+    doLogin = applyStateTransition (login defaultFIBSHost defaultFIBSPort "habaztest_a" "habaztest") stateTMV
+
+applyStateTransition :: SessionStateTransition -> TMVar SessionState -> IO ()
+applyStateTransition trans stateTMV = do
+  state <- atomically $ takeTMVar stateTMV
+  state' <- trans state
+  atomically $ putTMVar stateTMV state'
+
+barWidthRatio = 0.08
+homeWidthRatio = 0.08
 
 paintBoard :: Board -> DC a -> Rect -> IO ()
 paintBoard board dc viewArea = 

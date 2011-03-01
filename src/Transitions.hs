@@ -2,6 +2,7 @@
 This module defines functions that transition between session, match and game states.
 -}
 module Transitions(
+  SessionStateTransition,
   login,
   transition
 ) where
