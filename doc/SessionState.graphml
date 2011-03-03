@@ -107,7 +107,7 @@
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
             <y:Point x="319.8985290527344" y="422.85015869140625"/>
           </y:Path>
-          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:LineStyle color="#000000" type="dashed" width="1.0"/>
           <y:Arrows source="none" target="standard"/>
           <y:Arc height="3.7315752506256104" ratio="0.1044512614607811" type="fixedRatio"/>
         </y:ArcEdge>
@@ -119,7 +119,7 @@
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
             <y:Point x="413.4339599609375" y="419.6501770019531"/>
           </y:Path>
-          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:LineStyle color="#000000" type="dashed" width="1.0"/>
           <y:Arrows source="none" target="standard"/>
           <y:Arc height="1.2627160549163818" ratio="0.03365597873926163" type="fixedRatio"/>
         </y:ArcEdge>

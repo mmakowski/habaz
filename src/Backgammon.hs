@@ -10,6 +10,7 @@ module Backgammon(
   pegs,
   count,
   owner,
+  (!),
   -- * Constants
   initialBoard
 ) where
