@@ -18,7 +18,7 @@ module Model(
   initialSessionState,
   -- * Transitions
   SessionStateTransition,
-  login
+  login, logout
 ) where
 import FIBSClient (Connection)
 import FIBSClient hiding (login, logout, Flag (..))

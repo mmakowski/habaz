@@ -1,20 +1,13 @@
 module Main where
-import Backgammon
-import Control.Concurrent
-import Control.Concurrent.STM
-import Control.Monad
-import FIBSClient hiding (login)
-import Graphics.UI.WX
---import Session
---import Transitions
-
-import Model
+import Model (initialSessionState)
 import View (createView)
+import Controller (controller)
+import Graphics.UI.WX (start)
 
 main :: IO ()
 main = start $ do
   view <- createView
-  return () -- TODO
+  controller initialSessionState view
   
 {-
 main = 
@@ -22,7 +15,7 @@ main =
      msgsTV <- newTVarIO [] -- TODO: this should be a TChan
      forkIO $ readerThread sessionTV msgsTV
      start $ habazWindow sessionTV msgsTV
--}
+
 readerThread :: TMVar SessionState -> TVar [ParseResult FIBSMessage] -> IO ()
 readerThread sessionTMV msgsTV = forever $ do 
   s <- atomically $ readTMVar sessionTMV
@@ -41,4 +34,4 @@ readerThread sessionTMV msgsTV = forever $ do
     append outpTV msg = atomically $ do
       outp <- readTVar outpTV
       writeTVar outpTV $ outp ++ [msg]
-    
+-}    

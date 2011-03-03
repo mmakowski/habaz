@@ -2,15 +2,19 @@
 -}
 module View(
   -- * Representation  
-  View,
-  Menu,
-  -- ** Accessors
+  View, Menu,
+  -- ** Getters
   mainWindow, menu,
   logInItem, logOutItem, exitItem,
+  -- ** Wrappers for UI toolkit
+  setCommandHandler,
   -- * Actions
-  ViewAction,
-  disableLogInItem, enableLogInItem,
-  disableLogOutItem, enableLogOutItem,
+  ViewUpdate,
+  (|>),
+  disableLogIn, enableLogIn,
+  disableLogOut, enableLogOut,
+  closeMainWindow,
+  showInfoMessage,
   -- * Construction
   createView
 ) where
@@ -34,16 +38,33 @@ data Menu = Menu { logInItem :: MenuItem ()
                  , exitItem :: MenuItem ()
                  }
 
+-- ** Wrappers for UI toolkit
+
+type CommandHandler = IO ()
+setCommandHandler :: Commanding a => a -> CommandHandler -> IO ()
+setCommandHandler c h = set c [ on command := h ]
+
 -- * Actions
 
-type ViewAction = SessionState -> View -> IO ()
+type ViewUpdate = View -> IO ()
 
-disableLogInItem = setMenuEnabled logInItem False
-enableLogInItem = setMenuEnabled logInItem True
-disableLogOutItem = setMenuEnabled logOutItem False
-enableLogOutItem = setMenuEnabled logOutItem True
+-- | Composition of ViewUpdates
+(|>) :: ViewUpdate -> ViewUpdate -> ViewUpdate
+u1 |> u2 = \v -> do u1 v; u2 v
 
-setMenuEnabled itemAcc b _ v = set (itemAcc $ menu v) [ enabled := b ]
+disableLogIn = setMenuEnabled logInItem False
+enableLogIn = setMenuEnabled logInItem True
+disableLogOut = setMenuEnabled logOutItem False
+enableLogOut = setMenuEnabled logOutItem True
+
+setMenuEnabled itemAcc b v = set (itemAcc $ menu v) [ enabled := b ]
+
+closeMainWindow v = close $ mainWindow v
+
+showInfoMessage :: String -> ViewUpdate
+showInfoMessage msg v = infoDialog (mainWindow v) "Info" msg
+
+-- TODO: displaySession :: SessionState -> ViewUpdate
 
 -- * Construction
 
