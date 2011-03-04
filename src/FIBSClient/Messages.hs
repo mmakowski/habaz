@@ -43,6 +43,7 @@ data FIBSMessage
      | System { message :: String }
      | ReadyOn
      | ReadyOff
+     | ConnectionTimeOut
      | Welcome { name :: String
                , lastLogin :: UTCTime
                , lastHost :: String 
@@ -245,14 +246,16 @@ parseUnprefixedLine "login:" rest = (ParseSuccess LoginPrompt, rest)
 -- system message
 parseUnprefixedLine ('*':('*':(' ':msg))) rest = (ParseSuccess (recognise msg), rest)
   where 
-    recognise msg
-      | msg == "You're now ready to invite or join someone." = ReadyOn
-      | msg == "You're now refusing to play with someone." = ReadyOff
-      | otherwise = System msg
+    recognise "You're now ready to invite or join someone." = ReadyOn
+    recognise "You're now refusing to play with someone." = ReadyOff
+    recognise msg = System msg
 -- empty line
 parseUnprefixedLine "" rest = skip "" rest
 -- free form
-parseUnprefixedLine line rest = (ParseSuccess (FreeForm line), rest)
+parseUnprefixedLine line rest = (ParseSuccess (recognise line), rest)
+  where
+    recognise "Connection timed out." = ConnectionTimeOut
+    recognise line = FreeForm line
 
 test_loginPromptParsedCorrectly = 
   assertEqual "login prompt" 
@@ -273,6 +276,9 @@ test_blankLineIsSkipped =
               (ParseSuccess (System "system message"), [])
               (parseFIBSMessage "\r\n** system message")
 
+test_connectionTimeOutParsedCorrectly =
+  "Connection timed out." `parsesTo` ConnectionTimeOut
+  
 test_freeFormParsedCorrectly =
   assertEqual "free form"
               (ParseSuccess (FreeForm "aleks and Ubaretzu start a 1 point match."), [])
@@ -364,26 +370,31 @@ test_motdParsedCorrectly =
       \+--------------------------------------------------------------------+\r\n"
 
 -- WhoInfo
-parseWhoInfo line rest = 
-  let [name, opponent, watching, ready, away, rating, experience, idle, 
-       login, hostname, client, email] = words line
-  in (WhoInfo <$> pure name
-              <*> parseMaybeString opponent
-              <*> parseMaybeString watching
-              <*> parseBool ready
-              <*> parseBool away
-              <*> parse rating
-              <*> parse experience
-              <*> parse idle
-              <*> parseUTCTime login
-              <*> pure hostname
-              <*> parseMaybeString client
-              <*> parseMaybeString email,
-      rest)
+parseWhoInfo line rest = parseWhoInfoWords (words line) rest
+parseWhoInfoWords [name, opponent, watching, ready, away, rating, experience, idle, 
+                   login, hostname, client, email] rest = 
+  (WhoInfo <$> pure name
+           <*> parseMaybeString opponent
+           <*> parseMaybeString watching
+           <*> parseBool ready
+           <*> parseBool away
+           <*> parse rating
+           <*> parse experience
+           <*> parse idle
+           <*> parseUTCTime login
+           <*> pure hostname
+           <*> parseMaybeString client
+           <*> parseMaybeString email,
+   rest)
+parseWhoInfoWords w rest = (ParseFailure $ "unable to parse " ++ (show w) ++ " as WhoInfo", rest)
 
 test_whoInfoParsedCorrectly = 
   "5 mgnu_advanced someplayer - 1 0 1912.15 827 8 1040515752 192.168.143.5 3DFiBs -" `parsesTo`
   (WhoInfo "mgnu_advanced" (Just "someplayer") Nothing True False 1912.15 827 8 (toUTCTime "1040515752") "192.168.143.5" (Just "3DFiBs") Nothing)
+
+test_whoInfoParseFailure = 
+  ("5 " ++ badLine) `failsToParseWithErr` ("unable to parse " ++ (show $ words badLine) ++ " as WhoInfo")
+  where badLine = "mgnu_advanced someplayer - 1 0 1912.15 lubudubu logs in."
 
 test_endOfWhoInfoBlockIsSkipped =
   "6\r\n\r\nsome message\r\n" `parsesTo` (FreeForm "some message")
@@ -526,3 +537,4 @@ stripCRLF str = if "\r\n" `isSuffixOf` str then init (init str) else str
 -- helper test functions
 
 str `parsesTo` msg = assertEqual "" (ParseSuccess msg, []) (parseFIBSMessage str)
+str `failsToParseWithErr` err = assertEqual "" (ParseFailure err, []) (parseFIBSMessage str)

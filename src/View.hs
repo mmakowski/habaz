@@ -14,7 +14,7 @@ module View(
   disableLogIn, enableLogIn,
   disableLogOut, enableLogOut,
   closeMainWindow,
-  showInfoMessage,
+  showInfoMessage, showErrorMessages,
   -- * Construction
   createView
 ) where
@@ -24,6 +24,8 @@ import qualified Graphics.UI.WX as WX (Menu, menuBar)
 -- Model
 import Model
 import Backgammon -- TODO: re-export from Model
+-- Misc functions
+import Data.List (intercalate)
 
 -- * Representation
 
@@ -63,6 +65,10 @@ closeMainWindow v = close $ mainWindow v
 
 showInfoMessage :: String -> ViewUpdate
 showInfoMessage msg v = infoDialog (mainWindow v) "Info" msg
+
+showErrorMessages :: [String] -> ViewUpdate
+showErrorMessages [] _ = return ()
+showErrorMessages msgs v = errorDialog (mainWindow v) "Error" (intercalate "\n\n" msgs)
 
 -- TODO: displaySession :: SessionState -> ViewUpdate
 

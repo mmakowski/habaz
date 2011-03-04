@@ -16,11 +16,13 @@ module Model(
   SessionState (..),
   -- ** Constants
   initialSessionState,
+  -- * Direct manipulation
+  withErrors,
   -- * Transitions
   SessionStateTransition,
-  login, logout
+  login, logout, startProcessingMessages
 ) where
-import FIBSClient (Connection)
+--import FIBSClient (ReadWriteConnection, WriteOnlyConnection, connect, disconnect)
 import FIBSClient hiding (login, logout, Flag (..))
 import qualified FIBSClient (login, logout, Flag (..))
 import System.IO
@@ -34,17 +36,22 @@ class State a where
 data SessionState
      -- | Client is disconnected from the server
      = LoggedOut { errors :: [String] }
-     -- | Client is connected and logged in but ready state has not been recognised yet  
-     | LoggedIn { connection :: Connection
+     -- | Client is connected and logged in but the messages from the server are not being processed yet
+     | LoggedIn { connection :: WriteOnlyConnection
+                , messages :: [ParseResult FIBSMessage]
                 , errors :: [String]
                 }
+     -- | The messages are being processed; ready state has not been recognised yet
+     | ProcessingMessages { connection :: WriteOnlyConnection
+                          , errors :: [String]
+                          }
      -- | The player is refusing games and can't invite
-     | NotReady { connection :: Connection
+     | NotReady { connection :: WriteOnlyConnection
                   -- TODO: players
                 , errors :: [String]
                 }
      -- | The player is ready to play -- can invite and receive invitations
-     | Ready { connection :: Connection
+     | Ready { connection :: WriteOnlyConnection
                -- TODO: players
                -- TODO: invitations
              , errors :: [String]
@@ -55,7 +62,8 @@ data SessionState
 instance State SessionState where
   stateName s = case s of
     LoggedOut _     -> "LoggedOut"
-    LoggedIn _ _    -> "LoggedIn"
+    LoggedIn _ _ _    -> "LoggedIn"
+    ProcessingMessages _ _ -> "ProcessingMessages"
     NotReady _ _  -> "NotReady"
     Ready _ _     -> "Ready"
     
@@ -69,12 +77,14 @@ initialSessionState = LoggedOut []
 logError :: String -> SessionState -> SessionState
 logError e st = case st of
   (LoggedOut es)     -> LoggedOut (es ++ [e])
-  (LoggedIn c es)    -> LoggedIn c (es ++ [e])  
+  (LoggedIn c m es)    -> LoggedIn c m (es ++ [e])  
+  (ProcessingMessages c es) -> ProcessingMessages c (es ++ [e])    
   (NotReady c es)  -> NotReady c (es ++ [e])
   (Ready c es)     -> Ready c (es ++ [e])
 
 (LoggedOut _) `withErrors` es = LoggedOut es
-(LoggedIn c _) `withErrors` es = LoggedIn c es
+(LoggedIn c m _) `withErrors` es = LoggedIn c m es
+(ProcessingMessages c _) `withErrors` es = ProcessingMessages c es
 (NotReady c _) `withErrors` es = NotReady c es
 (Ready c _) `withErrors` es = Ready c es
 
@@ -99,7 +109,8 @@ login host port userName password s@(LoggedOut es) = connectAndLogin `catch` err
          case loginStatus of
            LoginFailure e -> do disconnect conn
                                 logErrorIO e s
-           LoginSuccess   -> do return $ LoggedIn conn es
+           LoginSuccess   -> do (msgs, conn') <- readMessages conn
+                                return $ LoggedIn conn' msgs es
     errorHandler e = logErrorIO ("error connecting to " ++ host ++ ":" ++ port) s
 login _ _ _ _ s = logErrorIO ("unable to login in " ++ (stateName s) ++ " state") s
 
@@ -107,12 +118,20 @@ login _ _ _ _ s = logErrorIO ("unable to login in " ++ (stateName s) ++ " state"
 -- | Logs out and disconnects from FIBS.
 logout :: SessionStateTransition
 logout s@(LoggedOut _) = logErrorIO "unable to logout in LoggedOut state" s
-logout s = 
-  do let conn = connection s
-     FIBSClient.logout conn
-     disconnect conn
-     return $ LoggedOut $ errors s
+logout s = do 
+  let conn = connection s
+  FIBSClient.logout conn
+  disconnect conn
+  return $ LoggedOut $ errors s
+
+
+-- | Indicates that messages are now being processed.
+startProcessingMessages :: SessionStateTransition
+startProcessingMessages (LoggedIn conn msgs e) = return $ ProcessingMessages conn e
+startProcessingMessages s = logErrorIO ("unable to start processing messages in " ++ (stateName s) ++ " state") s
+
 
 -- helper functions
+
 logErrorIO :: String -> SessionStateTransition
 logErrorIO e st = return $ logError e st
