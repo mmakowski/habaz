@@ -6,6 +6,8 @@ module Controller(
 import Model
 import View
 import FIBSClient (defaultFIBSHost, defaultFIBSPort)
+-- for mapping messages to updates
+import FIBSClient.Messages
 -- STM for session state:
 import Control.Concurrent.STM.TMVar
 import Control.Concurrent.STM (atomically)
@@ -38,38 +40,60 @@ executeTransition sessTrans sessTV = do
   atomically $ putTMVar sessTV sess'
   return sess'
 
--- ** Simple composed updates
-{-
-loginCmd :: ModelAndViewUpdate
-loginCmd = (login defaultFIBSHost defaultFIBSPort "habaztest_a" "habaztest") 
-           <> (\s -> disableLogIn |> enableLogOut |> showInfoMessage (show s))
--}
-logoutCmd :: ModelAndViewUpdate
-logoutCmd = logout <> (\s -> enableLogIn |> disableLogOut |> showInfoMessage (show s))
+-- ** Simple updates
 
-exitCmd :: ModelAndViewUpdate
-exitCmd _ = closeMainWindow
+logoutU :: ModelAndViewUpdate
+logoutU = logout <> (\s -> disableLogOut |> showInfoMessage (show s))
+
+exitU :: ModelAndViewUpdate
+exitU _ = closeMainWindow
+
+disconnectU :: ModelAndViewUpdate
+disconnectU = disconnect <> (\s -> enableLogIn |> disableLogOut)
+
+noOpU :: ModelAndViewUpdate
+noOpU _ _ = return ()
 
 -- ** Complex commands
 
-loginCmd :: ModelAndViewUpdate
-loginCmd sessTV view = do
+loginU :: ModelAndViewUpdate
+loginU sessTV view = do
   disableLogIn view
   sess' <- executeTransition (login defaultFIBSHost defaultFIBSPort "habaztest_a" "habaztest") sessTV
   case sess' of
-    (LoggedOut e)    -> do reportErrors sessTV view
+    (Disconnected e) -> do reportErrors sessTV view
                            enableLogIn view
     (LoggedIn c m e) -> do startMessageProcessingThread m
                            (disableLogIn |> enableLogOut) view
   where
     startMessageProcessingThread msgs = do 
       executeTransition startProcessingMessages sessTV
-      -- TODO: stop this thread once current session is disconnected
       forkIO $ processMessage msgs
     processMessage (msg:msgs) = do
       putStrLn (show msg) -- TODO: state transition
-      processMessage msgs
+      (updateForMessage msg) sessTV view
+      if isTerminating msg then disconnectU sessTV view
+        else processMessage msgs
       
+-- ** Model and View Updates for FIBS messages
+
+-- | Yields ModelAndViewUpdate corresponding to given FIBSMessage
+updateForMessage :: ParseResult FIBSMessage -> ModelAndViewUpdate
+updateForMessage (ParseFailure err) = 
+  \sessTV view -> do executeTransition (logErrorIO err) sessTV
+                     reportErrors sessTV view
+updateForMessage (ParseSuccess msg) = case msg of
+  OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> recogniseReadyU msg
+  _ -> noOpU
+  
+recogniseReadyU :: FIBSMessage -> ModelAndViewUpdate
+recogniseReadyU msg sessTV view = execAndShow $ if ready msg then recogniseReady else recogniseNotReady
+  where
+    execAndShow trans = do
+      sess <- executeTransition trans sessTV
+      showInfoMessage (show sess) view
+
+
 -- ** Misc ModelAndViewUpdates
 
 -- | Displays the errors stored in SessionState in the View and removes them from SessionState.
@@ -89,9 +113,9 @@ controller session view = do
   
 bindViewActions :: TMVar SessionState -> View -> IO ()
 bindViewActions sessionTV view = do
-  setCommandHandler (logInItem $ menu view) (run loginCmd)
-  setCommandHandler (logOutItem $ menu view) (run logoutCmd)  
-  setCommandHandler (exitItem $ menu view) (run exitCmd)
+  setCommandHandler (logInItem $ menu view) (run loginU)
+  setCommandHandler (logOutItem $ menu view) (run logoutU)  
+  setCommandHandler (exitItem $ menu view) (run exitU)
   where
     run cmd = do forkIO $ cmd sessionTV view; return ()
       

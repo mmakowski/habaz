@@ -20,11 +20,11 @@ module Model(
   withErrors,
   -- * Transitions
   SessionStateTransition,
-  login, logout, startProcessingMessages
+  login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady,
+  logErrorIO
 ) where
---import FIBSClient (ReadWriteConnection, WriteOnlyConnection, connect, disconnect)
-import FIBSClient hiding (login, logout, Flag (..))
-import qualified FIBSClient (login, logout, Flag (..))
+import FIBSClient hiding (login, logout, disconnect, Flag (..))
+import qualified FIBSClient (login, logout, disconnect, Flag (..))
 import System.IO
 import System.IO.Error
 
@@ -35,7 +35,10 @@ class State a where
 
 data SessionState
      -- | Client is disconnected from the server
-     = LoggedOut { errors :: [String] }
+     = Disconnected { errors :: [String] } 
+     -- | Client is logged out but we still hold a connection which might need to be closed
+     | LoggedOut { connection :: WriteOnlyConnection
+                 , errors :: [String] }
      -- | Client is connected and logged in but the messages from the server are not being processed yet
      | LoggedIn { connection :: WriteOnlyConnection
                 , messages :: [ParseResult FIBSMessage]
@@ -61,7 +64,8 @@ data SessionState
 
 instance State SessionState where
   stateName s = case s of
-    LoggedOut _     -> "LoggedOut"
+    LoggedOut _ _   -> "LoggedOut"
+    Disconnected _  -> "Disconnected"
     LoggedIn _ _ _    -> "LoggedIn"
     ProcessingMessages _ _ -> "ProcessingMessages"
     NotReady _ _  -> "NotReady"
@@ -70,19 +74,21 @@ instance State SessionState where
 -- ** Constants
 
 -- | The session state at the start of the application
-initialSessionState = LoggedOut []
+initialSessionState = Disconnected []
 
 -- state manipulation functions
 
 logError :: String -> SessionState -> SessionState
 logError e st = case st of
-  (LoggedOut es)     -> LoggedOut (es ++ [e])
-  (LoggedIn c m es)    -> LoggedIn c m (es ++ [e])  
-  (ProcessingMessages c es) -> ProcessingMessages c (es ++ [e])    
-  (NotReady c es)  -> NotReady c (es ++ [e])
-  (Ready c es)     -> Ready c (es ++ [e])
+  LoggedOut c es     -> LoggedOut c (es ++ [e])
+  Disconnected es    -> Disconnected (es ++ [e])
+  LoggedIn c m es    -> LoggedIn c m (es ++ [e])  
+  ProcessingMessages c es -> ProcessingMessages c (es ++ [e])    
+  NotReady c es  -> NotReady c (es ++ [e])
+  Ready c es     -> Ready c (es ++ [e])
 
-(LoggedOut _) `withErrors` es = LoggedOut es
+(LoggedOut c _) `withErrors` es = LoggedOut c es
+(Disconnected _) `withErrors` es = Disconnected es
 (LoggedIn c m _) `withErrors` es = LoggedIn c m es
 (ProcessingMessages c _) `withErrors` es = ProcessingMessages c es
 (NotReady c _) `withErrors` es = NotReady c es
@@ -101,13 +107,13 @@ login :: String                  -- ^ host
       -> String                  -- ^ user name
       -> String                  -- ^ password
       -> SessionStateTransition  -- ^ the state transition
-login host port userName password s@(LoggedOut es) = connectAndLogin `catch` errorHandler
+login host port userName password s@(Disconnected es) = connectAndLogin `catch` errorHandler
   where
     connectAndLogin = 
       do conn <- connect host port
          loginStatus <- FIBSClient.login conn "Habaź_v0.1.0" userName password
          case loginStatus of
-           LoginFailure e -> do disconnect conn
+           LoginFailure e -> do FIBSClient.disconnect conn
                                 logErrorIO e s
            LoginSuccess   -> do (msgs, conn') <- readMessages conn
                                 return $ LoggedIn conn' msgs es
@@ -117,19 +123,38 @@ login _ _ _ _ s = logErrorIO ("unable to login in " ++ (stateName s) ++ " state"
 
 -- | Logs out and disconnects from FIBS.
 logout :: SessionStateTransition
-logout s@(LoggedOut _) = logErrorIO "unable to logout in LoggedOut state" s
+logout s@(LoggedOut _ _) = logErrorIO "unable to logout in LoggedOut state" s
+logout s@(Disconnected _) = logErrorIO "unable to logout in Disconnected state" s
 logout s = do 
   let conn = connection s
   FIBSClient.logout conn
-  disconnect conn
-  return $ LoggedOut $ errors s
+  return $ LoggedOut conn (errors s)
 
 
+-- | Disconnects from FIBS.
+disconnect :: SessionStateTransition
+disconnect s@(Disconnected _) = logErrorIO "unable to disconnect in Disconnected state" s
+disconnect s = do
+  let conn = connection s
+  FIBSClient.disconnect conn
+  return $ Disconnected (errors s)    
+  
 -- | Indicates that messages are now being processed.
 startProcessingMessages :: SessionStateTransition
 startProcessingMessages (LoggedIn conn msgs e) = return $ ProcessingMessages conn e
 startProcessingMessages s = logErrorIO ("unable to start processing messages in " ++ (stateName s) ++ " state") s
 
+-- | Recognises that player is not ready
+recogniseNotReady :: SessionStateTransition
+recogniseNotReady (ProcessingMessages conn e) = return $ NotReady conn e
+recogniseNotReady s = logErrorIO ("unable to recognise not ready state in " ++ (stateName s) ++ " state") s
+
+-- | Recognises that player is ready
+recogniseReady :: SessionStateTransition
+recogniseReady (ProcessingMessages conn e) = return $ Ready conn e
+recogniseReady s = logErrorIO ("unable to recognise ready state in " ++ (stateName s) ++ " state") s
+
+-- | Disconnect
 
 -- helper functions
 

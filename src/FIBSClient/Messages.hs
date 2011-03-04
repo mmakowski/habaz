@@ -18,6 +18,7 @@ module FIBSClient.Messages(
   isReadyOn,
   isOwnInfo,
   isWhoInfo,
+  isTerminating,
   -- ** Message list operations
   splitByFirst,
   splitByFirstWithLimit
@@ -44,6 +45,7 @@ data FIBSMessage
      | ReadyOn
      | ReadyOff
      | ConnectionTimeOut
+     | EndOfGoodbyeMessage
      | Welcome { name :: String
                , lastLogin :: UTCTime
                , lastHost :: String 
@@ -217,6 +219,10 @@ isOwnInfo (OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = True
 isOwnInfo _ = False
 isWhoInfo (WhoInfo _ _ _ _ _ _ _ _ _ _ _ _) = True
 isWhoInfo _ = False
+-- TODO: are the others needed? They have different type.
+isTerminating (ParseSuccess ConnectionTimeOut) = True
+isTerminating (ParseSuccess EndOfGoodbyeMessage) = True
+isTerminating _ = False
 
 -- message parsing
 
@@ -255,6 +261,7 @@ parseUnprefixedLine "" rest = skip "" rest
 parseUnprefixedLine line rest = (ParseSuccess (recognise line), rest)
   where
     recognise "Connection timed out." = ConnectionTimeOut
+    recognise "                      Keep them coming...." = EndOfGoodbyeMessage
     recognise line = FreeForm line
 
 test_loginPromptParsedCorrectly = 
@@ -279,6 +286,9 @@ test_blankLineIsSkipped =
 test_connectionTimeOutParsedCorrectly =
   "Connection timed out." `parsesTo` ConnectionTimeOut
   
+test_endOfGoodbyeMessageParsedCorrectly =
+  "                      Keep them coming....\r\n" `parsesTo` EndOfGoodbyeMessage
+
 test_freeFormParsedCorrectly =
   assertEqual "free form"
               (ParseSuccess (FreeForm "aleks and Ubaretzu start a 1 point match."), [])

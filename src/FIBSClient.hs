@@ -26,6 +26,8 @@ module FIBSClient(
   FIBSCommand (..),
   FIBSMessage (..),
   Flag (..),
+  -- ** Predicates
+  isTerminating,
   -- * Misc Data Types
   LoginStatus (..),
   ParseResult (..),

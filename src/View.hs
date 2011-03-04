@@ -91,7 +91,7 @@ createView =
                              set p [outerSize := newSize]
                              repaint p
            ]
-     timer f [ interval := 10, on command := return () ]
+     timer f [ interval := 1, on command := return () ]
      return $ View f menuRepr
 
 createMenuBar :: IO ([WX.Menu ()], Menu)
