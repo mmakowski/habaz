@@ -68,13 +68,21 @@ loginU sessTV view = do
   where
     startMessageProcessingThread msgs = do 
       executeTransition startProcessingMessages sessTV
-      forkIO $ processMessage msgs
+      forkIO $ processMessage msgs `catch` errorHandler
     processMessage (msg:msgs) = do
       putStrLn (show msg) -- TODO: state transition
       (updateForMessage msg) sessTV view
       if isTerminating msg then disconnectU sessTV view
         else processMessage msgs
-      
+    errorHandler _ = do
+      -- this is typically executed when a session is logged out when the server disconnects after a log
+      -- out but there is a backlog of messages our end and the message processing thread has not received
+      -- a terminating message. So far I only noticed it happening when a Log Out command is issued shortly
+      -- after a login. In this scenario we want to disconnect anyway so let's disconnect without reporting 
+      -- any errors to the user.
+      putStrLn "disconnecting in error handler"
+      disconnectU sessTV view 
+    
 -- ** Model and View Updates for FIBS messages
 
 -- | Yields ModelAndViewUpdate corresponding to given FIBSMessage

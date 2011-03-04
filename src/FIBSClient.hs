@@ -123,9 +123,9 @@ readMessages :: ReadWriteConnection          -- ^ a FIBS connection
              -> IO ([ParseResult FIBSMessage], WriteOnlyConnection)
              -- ^ IO action wrapping a (lazy) list of parsed FIBS messages and the write-only
              -- oonnection that should be used from now on.
-readMessages (RWConn h) = 
-  do msgStr <- hGetContents h -- lazy!
-     return $ (parseFIBSMessages msgStr, WOConn h)
+readMessages (RWConn h) = do
+  msgStr <- hGetContents h
+  return $ (parseFIBSMessages msgStr, WOConn h)
 
 -- | Sends a command to FIBS.
 sendCommand :: WriteOnlyConnection   -- ^ a FIBS connection
