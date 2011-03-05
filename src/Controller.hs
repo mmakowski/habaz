@@ -43,13 +43,16 @@ executeTransition sessTrans sessTV = do
 -- ** Simple updates
 
 logoutU :: ModelAndViewUpdate
-logoutU = logout <> (\s -> disableLogOut |> showInfoMessage (show s))
+logoutU = logout <> (\s -> disableLogOut |> disableReady |> showInfoMessage (show s))
 
 exitU :: ModelAndViewUpdate
 exitU _ = closeMainWindow
 
 disconnectU :: ModelAndViewUpdate
-disconnectU = disconnect <> (\s -> enableLogIn |> disableLogOut)
+disconnectU = disconnect <> (\s -> enableLogIn |> disableLogOut |> disableReady)
+
+toggleReadyU :: ModelAndViewUpdate
+toggleReadyU = toggleReady <> (\_ _ -> return ())
 
 noOpU :: ModelAndViewUpdate
 noOpU _ _ = return ()
@@ -91,15 +94,15 @@ updateForMessage (ParseFailure err) =
   \sessTV view -> do executeTransition (logErrorIO err) sessTV
                      reportErrors sessTV view
 updateForMessage (ParseSuccess msg) = case msg of
-  OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> recogniseReadyU msg
+  OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> recogniseReadyU $ ready msg
+  ReadyOn -> recogniseReadyU True
+  ReadyOff -> recogniseReadyU False
   _ -> noOpU
   
-recogniseReadyU :: FIBSMessage -> ModelAndViewUpdate
-recogniseReadyU msg sessTV view = execAndShow $ if ready msg then recogniseReady else recogniseNotReady
-  where
-    execAndShow trans = do
-      sess <- executeTransition trans sessTV
-      showInfoMessage (show sess) view
+recogniseReadyU :: Bool -> ModelAndViewUpdate
+recogniseReadyU ready sessTV view = do
+  executeTransition (if ready then recogniseReady else recogniseNotReady) sessTV
+  (enableReady |> (setCheckedReady ready)) view
 
 
 -- ** Misc ModelAndViewUpdates
@@ -123,6 +126,7 @@ bindViewActions :: TMVar SessionState -> View -> IO ()
 bindViewActions sessionTV view = do
   setCommandHandler (logInItem $ menu view) (run loginU)
   setCommandHandler (logOutItem $ menu view) (run logoutU)  
+  setCommandHandler (readyItem $ menu view) (run toggleReadyU)
   setCommandHandler (exitItem $ menu view) (run exitU)
   where
     run cmd = do forkIO $ cmd sessionTV view; return ()

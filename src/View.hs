@@ -2,10 +2,7 @@
 -}
 module View(
   -- * Representation  
-  View, Menu,
-  -- ** Getters
-  mainWindow, menu,
-  logInItem, logOutItem, exitItem,
+  View (..), Menu (..),
   -- ** Wrappers for UI toolkit
   setCommandHandler,
   -- * Actions
@@ -13,6 +10,7 @@ module View(
   (|>),
   disableLogIn, enableLogIn,
   disableLogOut, enableLogOut,
+  disableReady, enableReady, setCheckedReady,
   closeMainWindow,
   showInfoMessage, showErrorMessages,
   -- * Construction
@@ -37,6 +35,7 @@ data View = View { mainWindow :: Frame ()
 -- | Menu items which need to be accessed by Controller.
 data Menu = Menu { logInItem :: MenuItem ()
                  , logOutItem :: MenuItem ()
+                 , readyItem :: MenuItem ()
                  , exitItem :: MenuItem ()
                  }
 
@@ -58,8 +57,13 @@ disableLogIn = setMenuEnabled logInItem False
 enableLogIn = setMenuEnabled logInItem True
 disableLogOut = setMenuEnabled logOutItem False
 enableLogOut = setMenuEnabled logOutItem True
-
-setMenuEnabled itemAcc b v = set (itemAcc $ menu v) [ enabled := b ]
+disableReady = setMenuEnabled readyItem False
+enableReady = setMenuEnabled readyItem True
+setCheckedReady = setMenuChecked readyItem
+  
+setMenuEnabled = setMenuBoolProp enabled
+setMenuChecked = setMenuBoolProp checked
+setMenuBoolProp prop itemAcc b v = set (itemAcc $ menu v) [ prop := b ]
 
 closeMainWindow v = close $ mainWindow v
 
@@ -98,12 +102,17 @@ createMenuBar :: IO ([WX.Menu ()], Menu)
 createMenuBar = do
   session <- menuPane        [ text := "&Session"]
   logIn <- menuItem session  [ text := "Log &In..." ]
-  logOut <- menuItem session [ text := "Log &Out..."
+  logOut <- menuItem session [ text := "Log &Out"
                              , enabled := False
                              ]
+  ready <- menuItem session  [ text := "&Ready"
+                             , checkable := True
+                             , enabled := False
+                             ]
+  menuLine session
   exit <- menuItem session   [ text := "E&xit\tAlt+F4" ]
   return ([session],
-          Menu logIn logOut exit)
+          Menu logIn logOut ready exit)
 
 -- ** Board drawing
 

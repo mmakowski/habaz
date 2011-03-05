@@ -20,7 +20,7 @@ module Model(
   withErrors,
   -- * Transitions
   SessionStateTransition,
-  login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady,
+  login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, toggleReady,
   logErrorIO
 ) where
 import FIBSClient hiding (login, logout, disconnect, Flag (..))
@@ -120,8 +120,7 @@ login host port userName password s@(Disconnected es) = connectAndLogin `catch` 
     errorHandler e = logErrorIO ("error connecting to " ++ host ++ ":" ++ port) s
 login _ _ _ _ s = logErrorIO ("unable to login in " ++ (stateName s) ++ " state") s
 
-
--- | Logs out and disconnects from FIBS.
+-- | Logs out from FIBS.
 logout :: SessionStateTransition
 logout s@(LoggedOut _ _) = logErrorIO "unable to logout in LoggedOut state" s
 logout s@(Disconnected _) = logErrorIO "unable to logout in Disconnected state" s
@@ -129,7 +128,6 @@ logout s = do
   let conn = connection s
   FIBSClient.logout conn
   return $ LoggedOut conn (errors s)
-
 
 -- | Disconnects from FIBS.
 disconnect :: SessionStateTransition
@@ -154,7 +152,15 @@ recogniseReady :: SessionStateTransition
 recogniseReady (ProcessingMessages conn e) = return $ Ready conn e
 recogniseReady s = logErrorIO ("unable to recognise ready state in " ++ (stateName s) ++ " state") s
 
--- | Disconnect
+-- | Toggles ready state
+toggleReady :: SessionStateTransition
+toggleReady s@(Ready _ _) = toggleReady' s
+toggleReady s@(NotReady _ _) = toggleReady' s
+toggleReady s = logErrorIO ("unable to toggle ready state in " ++ (stateName s) ++ " state") s
+toggleReady' s = do 
+  let conn = connection s
+  sendCommand conn (Toggle FIBSClient.Ready)
+  return $ ProcessingMessages conn (errors s)
 
 -- helper functions
 

@@ -28,7 +28,7 @@
     <node id="n1">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.flowchart.terminator">
-          <y:Geometry height="40.0" width="80.0" x="218.0" y="544.0"/>
+          <y:Geometry height="40.0" width="80.0" x="157.0" y="579.0"/>
           <y:Fill color="#E8EEF7" color2="#B7C9E3" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="c" textColor="#000000" visible="true" width="38.6875" x="20.65625" y="10.6494140625">Ready</y:NodeLabel>
@@ -58,7 +58,7 @@
     <node id="n4">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.flowchart.terminator">
-          <y:Geometry height="40.0" width="80.0" x="423.0" y="544.0"/>
+          <y:Geometry height="40.0" width="80.0" x="498.0" y="579.0"/>
           <y:Fill color="#E8EEF7" color2="#B7C9E3" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="c" textColor="#000000" visible="true" width="57.361328125" x="11.3193359375" y="10.6494140625">NotReady</y:NodeLabel>
@@ -76,7 +76,6 @@
       </data>
     </node>
     <node id="n6">
-      <data key="d5"/>
       <data key="d6">
         <y:GenericNode configuration="com.yworks.flowchart.terminator">
           <y:Geometry height="40.0" width="80.0" x="322.0" y="119.75"/>
@@ -87,7 +86,6 @@
       </data>
     </node>
     <node id="n7">
-      <data key="d5"/>
       <data key="d6">
         <y:GenericNode configuration="com.yworks.flowchart.start2">
           <y:Geometry height="40.0" width="80.0" x="480.0" y="67.75"/>
@@ -137,11 +135,12 @@ LoggedOut and Disconnected</y:NodeLabel>
       <data key="d10">
         <y:ArcEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
-            <y:Point x="306.65106201171875" y="507.94866943359375"/>
+            <y:Point x="287.12060546875" y="537.699462890625"/>
           </y:Path>
           <y:LineStyle color="#000000" type="dashed" width="1.0"/>
           <y:Arrows source="none" target="standard"/>
-          <y:Arc height="-4.702582836151123" ratio="-0.1269744336605072" type="fixedRatio"/>
+          <y:EdgeLabel alignment="center" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="six_pos" modelPosition="ttail" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="90.71875" x="-75.12640337201543" y="71.68511962890625">recogniseReady</y:EdgeLabel>
+          <y:Arc height="11.754446029663086" ratio="0.21695709228515625" type="fixedRatio"/>
         </y:ArcEdge>
       </data>
     </edge>
@@ -149,11 +148,12 @@ LoggedOut and Disconnected</y:NodeLabel>
       <data key="d10">
         <y:ArcEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
-            <y:Point x="413.3876647949219" y="510.4001770019531"/>
+            <y:Point x="461.4275817871094" y="514.4349975585938"/>
           </y:Path>
           <y:LineStyle color="#000000" type="dashed" width="1.0"/>
           <y:Arrows source="none" target="standard"/>
-          <y:Arc height="1.2288825511932373" ratio="0.03365597873926163" type="fixedRatio"/>
+          <y:EdgeLabel alignment="center" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="six_pos" modelPosition="stail" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="109.392578125" x="52.57779452561033" y="13.974855080159443">recogniseNotReady</y:EdgeLabel>
+          <y:Arc height="18.316896438598633" ratio="0.3253406584262848" type="fixedRatio"/>
         </y:ArcEdge>
       </data>
     </edge>
@@ -192,6 +192,32 @@ LoggedOut and Disconnected</y:NodeLabel>
           <y:Arrows source="none" target="standard"/>
           <y:EdgeLabel alignment="center" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="six_pos" modelPosition="tail" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="36.6953125" x="-63.39306640625" y="22.863540842563282">logout</y:EdgeLabel>
           <y:Arc height="0.0" ratio="0.0" type="fixedRatio"/>
+        </y:ArcEdge>
+      </data>
+    </edge>
+    <edge id="e8" source="n1" target="n5">
+      <data key="d10">
+        <y:ArcEdge>
+          <y:Path sx="0.0" sy="0.0" tx="-28.9063824580453" ty="17.893339396614806">
+            <y:Point x="257.1222229003906" y="528.900390625"/>
+          </y:Path>
+          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:EdgeLabel alignment="center" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="six_pos" modelPosition="shead" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="71.3828125" x="-61.74319771805483" y="-28.84002685546875">toggleReady</y:EdgeLabel>
+          <y:Arc height="11.839498519897461" ratio="0.25853657722473145" type="fixedRatio"/>
+        </y:ArcEdge>
+      </data>
+    </edge>
+    <edge id="e9" source="n4" target="n5">
+      <data key="d10">
+        <y:ArcEdge>
+          <y:Path sx="0.0" sy="0.0" tx="12.858358874663281" ty="20.031148713914547">
+            <y:Point x="450.993408203125" y="546.1268310546875"/>
+          </y:Path>
+          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:EdgeLabel alignment="center" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="six_pos" modelPosition="stail" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="71.3828125" x="-16.474551079004527" y="-32.1788330078125">toggleReady</y:EdgeLabel>
+          <y:Arc height="9.150742530822754" ratio="0.18048781156539917" type="fixedRatio"/>
         </y:ArcEdge>
       </data>
     </edge>
