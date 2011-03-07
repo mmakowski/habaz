@@ -1,4 +1,11 @@
-{-
+{-|
+When the application is started the first window seen by the user i session window. It provides the user
+with a way to issue session commands like login, toggle ready state etc., as well as a list of logged in 
+players, and a chat box where the shouts appear. Using the lit of players the user can issue match 
+invitations.
+
+TODO: display invitation status
+
 -}
 module View(
   -- * Representation  

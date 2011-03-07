@@ -7,7 +7,8 @@ import Model
 import View
 import FIBSClient (defaultFIBSHost, defaultFIBSPort)
 -- for mapping messages to updates
-import FIBSClient.Messages
+import FIBSClient.Messages hiding (name, opponent, watching, ready, rating, experience)
+import qualified FIBSClient.Messages as Msg (name, opponent, watching, ready, rating, experience)
 -- STM for session state:
 import Control.Concurrent.STM.TMVar
 import Control.Concurrent.STM (atomically)
@@ -52,7 +53,7 @@ disconnectU :: ModelAndViewUpdate
 disconnectU = disconnect <> (\s -> enableLogIn |> disableLogOut |> disableReady)
 
 toggleReadyU :: ModelAndViewUpdate
-toggleReadyU = toggleReady <> (\_ _ -> return ())
+toggleReadyU = toggleReady <> (showInfoMessage . show)
 
 noOpU :: ModelAndViewUpdate
 noOpU _ _ = return ()
@@ -94,9 +95,10 @@ updateForMessage (ParseFailure err) =
   \sessTV view -> do executeTransition (logErrorIO err) sessTV
                      reportErrors sessTV view
 updateForMessage (ParseSuccess msg) = case msg of
-  OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> recogniseReadyU $ ready msg
   ReadyOn -> recogniseReadyU True
   ReadyOff -> recogniseReadyU False
+  OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> recogniseReadyU $ Msg.ready msg
+  WhoInfo _ _ _ _ _ _ _ _ _ _ _ _ -> updatePlayerInfoU msg
   _ -> noOpU
   
 recogniseReadyU :: Bool -> ModelAndViewUpdate
@@ -104,7 +106,23 @@ recogniseReadyU ready sessTV view = do
   executeTransition (if ready then recogniseReady else recogniseNotReady) sessTV
   (enableReady |> (setCheckedReady ready)) view
 
-
+updatePlayerInfoU :: FIBSMessage -> ModelAndViewUpdate
+updatePlayerInfoU wi sessTV view = do 
+  let playerInfo = whoInfoToPlayerInfo wi
+  executeTransition (updatePlayerInfo playerInfo) sessTV
+  return ()
+  -- TODO: view update
+                                
+whoInfoToPlayerInfo :: FIBSMessage -> PlayerInfo
+whoInfoToPlayerInfo wi =
+  PlayerInfo (Msg.name wi) (Msg.ready wi) (gameState wi) (Msg.rating wi) (Msg.experience wi)
+  where 
+    gameState wi = case (Msg.opponent wi) of
+      Just p -> Playing p
+      Nothing -> case (Msg.watching wi) of
+        Just p -> Watching p
+        Nothing -> None
+  
 -- ** Misc ModelAndViewUpdates
 
 -- | Displays the errors stored in SessionState in the View and removes them from SessionState.

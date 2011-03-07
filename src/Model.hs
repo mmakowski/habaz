@@ -14,6 +14,8 @@ Levels from /Match/ down are pure, /Session/ level involves IO actions.
 module Model(
   -- * States
   SessionState (..),
+  PlayerInfo (..),
+  PlayerGameState (..),
   -- ** Constants
   initialSessionState,
   -- * Direct manipulation
@@ -21,10 +23,15 @@ module Model(
   -- * Transitions
   SessionStateTransition,
   login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, toggleReady,
+  updatePlayerInfo,
   logErrorIO
 ) where
-import FIBSClient hiding (login, logout, disconnect, Flag (..))
-import qualified FIBSClient (login, logout, disconnect, Flag (..))
+import FIBSClient hiding (login, logout, disconnect, Flag (..), name)
+import qualified FIBSClient (login, logout, disconnect, Flag (..), name)
+-- player map
+import Data.Map (Map)
+import qualified Data.Map as Map
+-- exception handling
 import System.IO
 import System.IO.Error
 
@@ -46,16 +53,17 @@ data SessionState
                 }
      -- | The messages are being processed; ready state has not been recognised yet
      | ProcessingMessages { connection :: WriteOnlyConnection
+                          , players :: Map String PlayerInfo
                           , errors :: [String]
                           }
      -- | The player is refusing games and can't invite
      | NotReady { connection :: WriteOnlyConnection
-                  -- TODO: players
+                , players :: Map String PlayerInfo                  
                 , errors :: [String]
                 }
      -- | The player is ready to play -- can invite and receive invitations
      | Ready { connection :: WriteOnlyConnection
-               -- TODO: players
+             , players :: Map String PlayerInfo
                -- TODO: invitations
              , errors :: [String]
              }
@@ -67,10 +75,25 @@ instance State SessionState where
     LoggedOut _ _   -> "LoggedOut"
     Disconnected _  -> "Disconnected"
     LoggedIn _ _ _    -> "LoggedIn"
-    ProcessingMessages _ _ -> "ProcessingMessages"
-    NotReady _ _  -> "NotReady"
-    Ready _ _     -> "Ready"
+    ProcessingMessages _ _ _ -> "ProcessingMessages"
+    NotReady _ _ _ -> "NotReady"
+    Ready _ _ _    -> "Ready"
     
+
+data PlayerInfo = PlayerInfo { name :: String
+                             , ready :: Bool
+                             , playerGameState :: PlayerGameState
+                             , rating :: Float
+                             , experience :: Int
+                             } 
+                deriving (Eq, Show)
+
+
+data PlayerGameState = None
+                     | Playing String 
+                     | Watching String
+                     deriving (Eq, Show)
+                   
 -- ** Constants
 
 -- | The session state at the start of the application
@@ -83,16 +106,22 @@ logError e st = case st of
   LoggedOut c es     -> LoggedOut c (es ++ [e])
   Disconnected es    -> Disconnected (es ++ [e])
   LoggedIn c m es    -> LoggedIn c m (es ++ [e])  
-  ProcessingMessages c es -> ProcessingMessages c (es ++ [e])    
-  NotReady c es  -> NotReady c (es ++ [e])
-  Ready c es     -> Ready c (es ++ [e])
+  ProcessingMessages c p es -> ProcessingMessages c p (es ++ [e])    
+  NotReady c p es  -> NotReady c p (es ++ [e])
+  Ready c p es     -> Ready c p (es ++ [e])
 
+withErrors :: SessionState -> [String] -> SessionState
 (LoggedOut c _) `withErrors` es = LoggedOut c es
 (Disconnected _) `withErrors` es = Disconnected es
 (LoggedIn c m _) `withErrors` es = LoggedIn c m es
-(ProcessingMessages c _) `withErrors` es = ProcessingMessages c es
-(NotReady c _) `withErrors` es = NotReady c es
-(Ready c _) `withErrors` es = Ready c es
+(ProcessingMessages c ps _) `withErrors` es = ProcessingMessages c ps es
+(NotReady c ps _) `withErrors` es = NotReady c ps es
+(Ready c ps _) `withErrors` es = Ready c ps es
+
+withPlayers :: SessionState -> Map String PlayerInfo -> SessionState
+(ProcessingMessages c _ es) `withPlayers` ps = ProcessingMessages c ps es
+(NotReady c _ es) `withPlayers` ps = NotReady c ps es
+(Ready c _ es) `withPlayers` ps = Ready c ps es
 
 
 -- * Transitions
@@ -118,12 +147,12 @@ login host port userName password s@(Disconnected es) = connectAndLogin `catch` 
            LoginSuccess   -> do (msgs, conn') <- readMessages conn
                                 return $ LoggedIn conn' msgs es
     errorHandler e = logErrorIO ("error connecting to " ++ host ++ ":" ++ port) s
-login _ _ _ _ s = logErrorIO ("unable to login in " ++ (stateName s) ++ " state") s
+login _ _ _ _ s = logUnableToErrorIO "login" s
 
 -- | Logs out from FIBS.
 logout :: SessionStateTransition
-logout s@(LoggedOut _ _) = logErrorIO "unable to logout in LoggedOut state" s
-logout s@(Disconnected _) = logErrorIO "unable to logout in Disconnected state" s
+logout s@(LoggedOut _ _) = logUnableToErrorIO "logout" s
+logout s@(Disconnected _) = logUnableToErrorIO "logout" s
 logout s = do 
   let conn = connection s
   FIBSClient.logout conn
@@ -131,7 +160,7 @@ logout s = do
 
 -- | Disconnects from FIBS.
 disconnect :: SessionStateTransition
-disconnect s@(Disconnected _) = logErrorIO "unable to disconnect in Disconnected state" s
+disconnect s@(Disconnected _) = logUnableToErrorIO "disconnect" s
 disconnect s = do
   let conn = connection s
   FIBSClient.disconnect conn
@@ -139,30 +168,43 @@ disconnect s = do
   
 -- | Indicates that messages are now being processed.
 startProcessingMessages :: SessionStateTransition
-startProcessingMessages (LoggedIn conn msgs e) = return $ ProcessingMessages conn e
-startProcessingMessages s = logErrorIO ("unable to start processing messages in " ++ (stateName s) ++ " state") s
+startProcessingMessages (LoggedIn conn msgs e) = return $ ProcessingMessages conn (Map.empty) e
+startProcessingMessages s = logUnableToErrorIO "start processing messages" s
 
 -- | Recognises that player is not ready
 recogniseNotReady :: SessionStateTransition
-recogniseNotReady (ProcessingMessages conn e) = return $ NotReady conn e
-recogniseNotReady s = logErrorIO ("unable to recognise not ready state in " ++ (stateName s) ++ " state") s
+recogniseNotReady (ProcessingMessages conn p e) = return $ NotReady conn p e
+recogniseNotReady s = logUnableToErrorIO "recognise not ready state" s
 
 -- | Recognises that player is ready
 recogniseReady :: SessionStateTransition
-recogniseReady (ProcessingMessages conn e) = return $ Ready conn e
-recogniseReady s = logErrorIO ("unable to recognise ready state in " ++ (stateName s) ++ " state") s
+recogniseReady (ProcessingMessages conn p e) = return $ Ready conn p e
+recogniseReady s = logUnableToErrorIO "recognise ready state" s
 
 -- | Toggles ready state
 toggleReady :: SessionStateTransition
-toggleReady s@(Ready _ _) = toggleReady' s
-toggleReady s@(NotReady _ _) = toggleReady' s
-toggleReady s = logErrorIO ("unable to toggle ready state in " ++ (stateName s) ++ " state") s
+toggleReady s@(Ready _ _ _) = toggleReady' s
+toggleReady s@(NotReady _ _ _) = toggleReady' s
+toggleReady s = logUnableToErrorIO "toggle ready state" s
 toggleReady' s = do 
   let conn = connection s
   sendCommand conn (Toggle FIBSClient.Ready)
-  return $ ProcessingMessages conn (errors s)
+  return $ ProcessingMessages conn (players s) (errors s)
+
+-- | Update player info
+updatePlayerInfo :: PlayerInfo -> SessionStateTransition
+updatePlayerInfo p s@(ProcessingMessages _ _ _) = updatePlayerInfo' p s 
+updatePlayerInfo p s@(Ready _ _ _) = updatePlayerInfo' p s
+updatePlayerInfo p s@(NotReady _ _ _) = updatePlayerInfo' p s
+updatePlayerInfo _ s = logUnableToErrorIO "update player info" s
+updatePlayerInfo' p s = do
+  let ps = Map.insert (name p) p (players s) 
+  return $ s `withPlayers` ps
 
 -- helper functions
 
 logErrorIO :: String -> SessionStateTransition
 logErrorIO e st = return $ logError e st
+
+logUnableToErrorIO :: String -> SessionStateTransition
+logUnableToErrorIO act s = logErrorIO ("unable to " ++ act ++ " in " ++ (stateName s) ++ " state") s
