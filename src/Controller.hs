@@ -24,6 +24,10 @@ type ModelAndViewUpdate = TMVar SessionState -> View -> IO ()
 
 type StateDependentViewUpdate = SessionState -> ViewUpdate
 
+-- | A StateDependentViewUpdate that doesn't do anything
+noOpSDVU :: StateDependentViewUpdate
+noOpSDVU _ _ = return ()
+
 -- | Combines a session state transition with a view update
 (<>) :: SessionStateTransition -> StateDependentViewUpdate -> ModelAndViewUpdate
 (<>) sessTrans viewUpd sessTV view = do
@@ -53,7 +57,7 @@ disconnectU :: ModelAndViewUpdate
 disconnectU = disconnect <> (\s -> enableLogIn |> disableLogOut |> disableReady)
 
 toggleReadyU :: ModelAndViewUpdate
-toggleReadyU = toggleReady <> (showInfoMessage . show)
+toggleReadyU = toggleReady <> noOpSDVU
 
 noOpU :: ModelAndViewUpdate
 noOpU _ _ = return ()
@@ -109,10 +113,9 @@ recogniseReadyU ready sessTV view = do
 updatePlayerInfoU :: FIBSMessage -> ModelAndViewUpdate
 updatePlayerInfoU wi sessTV view = do 
   let playerInfo = whoInfoToPlayerInfo wi
-  executeTransition (updatePlayerInfo playerInfo) sessTV
-  return ()
-  -- TODO: view update
-                                
+  sess <- executeTransition (updatePlayerInfo playerInfo) sessTV
+  showPlayers sess view
+  
 whoInfoToPlayerInfo :: FIBSMessage -> PlayerInfo
 whoInfoToPlayerInfo wi =
   PlayerInfo (Msg.name wi) (Msg.ready wi) (gameState wi) (Msg.rating wi) (Msg.experience wi)
@@ -142,10 +145,10 @@ controller session view = do
   
 bindViewActions :: TMVar SessionState -> View -> IO ()
 bindViewActions sessionTV view = do
-  setCommandHandler (logInItem $ menu view) (run loginU)
-  setCommandHandler (logOutItem $ menu view) (run logoutU)  
-  setCommandHandler (readyItem $ menu view) (run toggleReadyU)
-  setCommandHandler (exitItem $ menu view) (run exitU)
+  setCommandHandler (logInItem $ sessionMenu view) (run loginU)
+  setCommandHandler (logOutItem $ sessionMenu view) (run logoutU)  
+  setCommandHandler (readyItem $ sessionMenu view) (run toggleReadyU)
+  setCommandHandler (exitItem $ sessionMenu view) (run exitU)
   where
     run cmd = do forkIO $ cmd sessionTV view; return ()
       

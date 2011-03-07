@@ -9,7 +9,7 @@ TODO: display invitation status
 -}
 module View(
   -- * Representation  
-  View (..), Menu (..),
+  View (..), SessionMenu (..),
   -- ** Wrappers for UI toolkit
   setCommandHandler,
   -- * Actions
@@ -20,6 +20,7 @@ module View(
   disableReady, enableReady, setCheckedReady,
   closeMainWindow,
   showInfoMessage, showErrorMessages,
+  showPlayers,
   -- * Construction
   createView
 ) where
@@ -29,22 +30,26 @@ import qualified Graphics.UI.WX as WX (Menu, menuBar)
 -- Model
 import Model
 import Backgammon -- TODO: re-export from Model
+-- player map
+import Data.Map (Map)
+import qualified Data.Map as Map
 -- Misc functions
 import Data.List (intercalate)
 
 -- * Representation
 
 -- | All view elements that need to be acessed by Controller.
-data View = View { mainWindow :: Frame ()
-                 , menu :: Menu
+data View = View { sessionWindow :: Frame ()
+                 , sessionMenu :: SessionMenu
+                 , playerList :: ListCtrl ()
                  }
 
 -- | Menu items which need to be accessed by Controller.
-data Menu = Menu { logInItem :: MenuItem ()
-                 , logOutItem :: MenuItem ()
-                 , readyItem :: MenuItem ()
-                 , exitItem :: MenuItem ()
-                 }
+data SessionMenu = Menu { logInItem :: MenuItem ()
+                        , logOutItem :: MenuItem ()
+                        , readyItem :: MenuItem ()
+                        , exitItem :: MenuItem ()
+                        }
 
 -- ** Wrappers for UI toolkit
 
@@ -70,42 +75,46 @@ setCheckedReady = setMenuChecked readyItem
   
 setMenuEnabled = setMenuBoolProp enabled
 setMenuChecked = setMenuBoolProp checked
-setMenuBoolProp prop itemAcc b v = set (itemAcc $ menu v) [ prop := b ]
+setMenuBoolProp prop itemAcc b v = set (itemAcc $ sessionMenu v) [ prop := b ]
 
-closeMainWindow v = close $ mainWindow v
+closeMainWindow v = close $ sessionWindow v
 
 showInfoMessage :: String -> ViewUpdate
-showInfoMessage msg v = infoDialog (mainWindow v) "Info" msg
+showInfoMessage msg v = infoDialog (sessionWindow v) "Info" msg
 
 showErrorMessages :: [String] -> ViewUpdate
 showErrorMessages [] _ = return ()
-showErrorMessages msgs v = errorDialog (mainWindow v) "Error" (intercalate "\n\n" msgs)
+showErrorMessages msgs v = errorDialog (sessionWindow v) "Error" (intercalate "\n\n" msgs)
+
+showPlayers :: SessionState -> ViewUpdate
+showPlayers ss v = set (playerList v) [ items := map (\p -> [name p, show $ rating p]) (Map.elems $ players ss) ]
 
 -- TODO: displaySession :: SessionState -> ViewUpdate
 
 -- * Construction
 
 startWidth, startHeight :: Int
-startWidth = 500
-startHeight = 500
+startWidth = 200
+startHeight = 300
+
 
 createView :: IO View
-createView =
-  do f <- frame [ text := "Habaź" ]
-     p <- panel f [ on paint := paintBoard initialBoard -- TODO
-                  , on click := \p -> infoDialog f "dupa" (show p)
-                  ]
-     (menuBar, menuRepr) <- createMenuBar
-     set f [ WX.menuBar := menuBar
-           , layout := minsize (sz startWidth startHeight) $ widget p
-           , on resize := do newSize <- get f clientSize
-                             set p [outerSize := newSize]
-                             repaint p
-           ]
-     timer f [ interval := 1, on command := return () ]
-     return $ View f menuRepr
+createView = do
+  f <- frame [ text := "Habaź" ]
+  (menuBar, menuRepr) <- createMenuBar
+  playerList <- listCtrl f [ columns := [ ("Name", AlignLeft, 120)
+                                        , ("Rating", AlignLeft, 50)
+                                        ]
+                           ]
+  set f [ WX.menuBar := menuBar
+        , layout := minsize (sz startWidth startHeight) $
+          column 5 [ fill $ widget playerList ]
+        ]
+  timer f [ interval := 1, on command := return () ]
+  return $ View f menuRepr playerList
+  
 
-createMenuBar :: IO ([WX.Menu ()], Menu)
+createMenuBar :: IO ([WX.Menu ()], SessionMenu)
 createMenuBar = do
   session <- menuPane        [ text := "&Session"]
   logIn <- menuItem session  [ text := "Log &In..." ]
