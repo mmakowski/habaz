@@ -102,7 +102,7 @@ updateForMessage (ParseSuccess msg) = case msg of
   ReadyOn -> recogniseReadyU True
   ReadyOff -> recogniseReadyU False
   OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> recogniseReadyU $ Msg.ready msg
-  WhoInfo _ _ _ _ _ _ _ _ _ _ _ _ -> updatePlayerInfoU msg
+  WhoInfo _ _ _ _ _ _ _ _ _ _ _ _ -> updatePlayerU msg
   _ -> noOpU
   
 recogniseReadyU :: Bool -> ModelAndViewUpdate
@@ -110,15 +110,15 @@ recogniseReadyU ready sessTV view = do
   executeTransition (if ready then recogniseReady else recogniseNotReady) sessTV
   (enableReady |> (setCheckedReady ready)) view
 
-updatePlayerInfoU :: FIBSMessage -> ModelAndViewUpdate
-updatePlayerInfoU wi sessTV view = do 
+updatePlayerU :: FIBSMessage -> ModelAndViewUpdate
+updatePlayerU wi sessTV view = do 
   let playerInfo = whoInfoToPlayerInfo wi
-  sess <- executeTransition (updatePlayerInfo playerInfo) sessTV
+  sess <- executeTransition (updatePlayer playerInfo) sessTV
   showPlayers sess view
   
 whoInfoToPlayerInfo :: FIBSMessage -> PlayerInfo
 whoInfoToPlayerInfo wi =
-  PlayerInfo (Msg.name wi) (Msg.ready wi) (gameState wi) (Msg.rating wi) (Msg.experience wi)
+  PlayerInfo (PlayerName (Msg.name wi)) (Msg.ready wi) (gameState wi) (Msg.rating wi) (Msg.experience wi)
   where 
     gameState wi = case (Msg.opponent wi) of
       Just p -> Playing p

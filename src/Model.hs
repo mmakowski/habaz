@@ -14,8 +14,11 @@ Levels from /Match/ down are pure, /Session/ level involves IO actions.
 module Model(
   -- * States
   SessionState (..),
+  Players (..),
+  PlayerName (PlayerName), pnstr,
   PlayerInfo (..),
   PlayerGameState (..),
+  PlayerDelta (..),
   -- ** Constants
   initialSessionState,
   -- * Direct manipulation
@@ -23,7 +26,7 @@ module Model(
   -- * Transitions
   SessionStateTransition,
   login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, toggleReady,
-  updatePlayerInfo,
+  updatePlayer,
   logErrorIO
 ) where
 import FIBSClient hiding (login, logout, disconnect, Flag (..), name)
@@ -53,17 +56,17 @@ data SessionState
                 }
      -- | The messages are being processed; ready state has not been recognised yet
      | ProcessingMessages { connection :: WriteOnlyConnection
-                          , players :: Map String PlayerInfo
+                          , players :: Players
                           , errors :: [String]
                           }
      -- | The player is refusing games and can't invite
      | NotReady { connection :: WriteOnlyConnection
-                , players :: Map String PlayerInfo                  
+                , players :: Players
                 , errors :: [String]
                 }
      -- | The player is ready to play -- can invite and receive invitations
      | Ready { connection :: WriteOnlyConnection
-             , players :: Map String PlayerInfo
+             , players :: Players
                -- TODO: invitations
              , errors :: [String]
              }
@@ -79,8 +82,20 @@ instance State SessionState where
     NotReady _ _ _ -> "NotReady"
     Ready _ _ _    -> "Ready"
     
+data Players = Players { playerMap :: Map PlayerName PlayerInfo
+                       , playerDeltas :: [PlayerDelta]
+                       }
+               deriving (Eq, Show)
 
-data PlayerInfo = PlayerInfo { name :: String
+newtype PlayerName = PlayerName String
+                   deriving (Eq, Ord, Show)
+
+pnstr :: PlayerName -> String
+pnstr (PlayerName s) = s
+
+-- | Player delta helps the view in figuring out what needs to be changed in the list of
+-- players that it displays.
+data PlayerInfo = PlayerInfo { name :: PlayerName
                              , ready :: Bool
                              , playerGameState :: PlayerGameState
                              , rating :: Float
@@ -88,12 +103,17 @@ data PlayerInfo = PlayerInfo { name :: String
                              } 
                 deriving (Eq, Show)
 
-
 data PlayerGameState = None
                      | Playing String 
                      | Watching String
                      deriving (Eq, Show)
                    
+data PlayerDelta = Added PlayerName
+                 | Removed PlayerName
+                 | Updated PlayerName
+                 deriving (Eq, Show)
+                          
+
 -- ** Constants
 
 -- | The session state at the start of the application
@@ -118,7 +138,7 @@ withErrors :: SessionState -> [String] -> SessionState
 (NotReady c ps _) `withErrors` es = NotReady c ps es
 (Ready c ps _) `withErrors` es = Ready c ps es
 
-withPlayers :: SessionState -> Map String PlayerInfo -> SessionState
+withPlayers :: SessionState -> Players -> SessionState
 (ProcessingMessages c _ es) `withPlayers` ps = ProcessingMessages c ps es
 (NotReady c _ es) `withPlayers` ps = NotReady c ps es
 (Ready c _ es) `withPlayers` ps = Ready c ps es
@@ -126,7 +146,7 @@ withPlayers :: SessionState -> Map String PlayerInfo -> SessionState
 
 -- * Transitions
 
--- | Type alias to make it clear where a function returns a state transition. Session state transitions
+-- | Type alias to make it clear where a function returns a state transition. Session state transitionsx
 -- might involve IO actions hence the result type is tainted with IO.
 type SessionStateTransition = SessionState -> IO SessionState
 
@@ -168,7 +188,8 @@ disconnect s = do
   
 -- | Indicates that messages are now being processed.
 startProcessingMessages :: SessionStateTransition
-startProcessingMessages (LoggedIn conn msgs e) = return $ ProcessingMessages conn (Map.empty) e
+startProcessingMessages (LoggedIn conn msgs e) = 
+  return $ ProcessingMessages conn (Players Map.empty []) e
 startProcessingMessages s = logUnableToErrorIO "start processing messages" s
 
 -- | Recognises that player is not ready
@@ -191,15 +212,19 @@ toggleReady' s = do
   sendCommand conn (Toggle FIBSClient.Ready)
   return $ ProcessingMessages conn (players s) (errors s)
 
--- | Update player info
-updatePlayerInfo :: PlayerInfo -> SessionStateTransition
-updatePlayerInfo p s@(ProcessingMessages _ _ _) = updatePlayerInfo' p s 
-updatePlayerInfo p s@(Ready _ _ _) = updatePlayerInfo' p s
-updatePlayerInfo p s@(NotReady _ _ _) = updatePlayerInfo' p s
-updatePlayerInfo _ s = logUnableToErrorIO "update player info" s
-updatePlayerInfo' p s = do
-  let ps = Map.insert (name p) p (players s) 
-  return $ s `withPlayers` ps
+-- | Updates player info
+updatePlayer :: PlayerInfo -> SessionStateTransition
+updatePlayer p s@(ProcessingMessages _ _ _) = updatePlayer' p s 
+updatePlayer p s@(Ready _ _ _) = updatePlayer' p s
+updatePlayer p s@(NotReady _ _ _) = updatePlayer' p s
+updatePlayer _ s = logUnableToErrorIO "update player info" s
+updatePlayer' p s = do
+  let pname = name p
+      ps = players s
+      pm = Map.insert pname p (playerMap ps) 
+      pd = (Updated pname):(playerDeltas ps)
+      ps' = Players pm pd
+  return $ s `withPlayers` ps'
 
 -- helper functions
 

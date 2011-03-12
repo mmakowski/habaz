@@ -86,8 +86,11 @@ showErrorMessages :: [String] -> ViewUpdate
 showErrorMessages [] _ = return ()
 showErrorMessages msgs v = errorDialog (sessionWindow v) "Error" (intercalate "\n\n" msgs)
 
+-- TODO: flickers! Try using Graphics.UI.WXCore
 showPlayers :: SessionState -> ViewUpdate
-showPlayers ss v = set (playerList v) [ items := map (\p -> [name p, show $ rating p]) (Map.elems $ players ss) ]
+showPlayers ss v = set (playerList v) [ items := map (\p -> [pnstr $ name p, show $ rating p]) 
+                                                     (Map.elems $ playerMap $ players ss) 
+                                      ]
 
 -- TODO: displaySession :: SessionState -> ViewUpdate
 
