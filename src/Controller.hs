@@ -78,7 +78,7 @@ loginU sessTV view = do
       executeTransition startProcessingMessages sessTV
       forkIO $ processMessage msgs `catch` errorHandler
     processMessage (msg:msgs) = do
-      putStrLn (show msg) -- TODO: state transition
+      putStrLn (show msg)
       (updateForMessage msg) sessTV view
       if isTerminating msg then disconnectU sessTV view
         else processMessage msgs
@@ -114,6 +114,7 @@ updatePlayerU :: FIBSMessage -> ModelAndViewUpdate
 updatePlayerU wi sessTV view = do 
   let playerInfo = whoInfoToPlayerInfo wi
   sess <- executeTransition (updatePlayer playerInfo) sessTV
+  -- TODO: this should not be called if executeTransition resulted in an error
   showPlayers sess view
   
 whoInfoToPlayerInfo :: FIBSMessage -> PlayerInfo
