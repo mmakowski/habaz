@@ -11,43 +11,21 @@ list of erros, the connection (when connected), list of players (when connected)
 
 Levels from /Match/ down are pure, /Session/ level involves IO actions.
 -}
-{-
 module Model(
   -- * States
-  SessionState (..),
-  Players (..),
-  PlayerName (PlayerName), pnstr,
-  PlayerInfo (..),
-  PlayerGameState (..),
-  PlayerDelta (..),
-  -- ** Constants
-  initialSessionState,
-  -- * Direct manipulation
-  withErrors,
+  Disconnected, LoggedOut, NotProcessingMessages, ProcessingMessages, NotReady, NotPlaying,
+  -- * Errors
+  TransitionError (..),
   -- * Transitions
-  SessionStateTransition,
-  login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, toggleReady,
-  updatePlayer,
-  logErrorIO
-) where
-import FIBSClient hiding (login, logout, disconnect, Flag (..), name)
-import qualified FIBSClient (login, logout, disconnect, Flag (..), name)
--- exception handling
-import System.IO
-import System.IO.Error
--}
-
-module Model(
-  -- * States
-  Disconnected, LoggedOut, NotProcessingMessages, ProcessingMessages, 
-  -- * Transitions
-  login, logout, disconnect, startProcessingMessages
+  login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, setNotReady,
+  setReady, updateOrAddPlayer
 ) where
 import FIBSClient hiding (login, logout, disconnect, Flag (..), LoginStatus (..), name)
 import qualified FIBSClient (login, logout, disconnect, Flag (..), LoginStatus (..), name)
 -- player map
 import Data.Map (Map)
 import qualified Data.Map as Map
+
 
 -- * States
 
@@ -68,18 +46,19 @@ class WithPlayers s where
 -- | All states where the player is ready to play.
 class (Connected s, WithPlayers s) => Ready s
 
+
 -- ** Types
 
 -- | Client is disconnected.
 data Disconnected = Disconnected
                   deriving (Eq, Show)
 
--- | Client is logged out but we still hold a connection which might need to be closed
+-- | Client is logged out but we still hold a connection which might need to be closed.
 data LoggedOut = LoggedOut { loConn :: WriteOnlyConnection }
                  deriving (Eq, Show)
 instance Connected LoggedOut where connection = loConn
   
--- | Client is connected and logged in but the messages from the server are not being processed yet
+-- | Client is connected and logged in but the messages from the server are not being processed yet.
 data NotProcessingMessages = NotProcessingMessages { npmConn :: WriteOnlyConnection 
                                                    , messages :: [ParseResult FIBSMessage]
                                                    }
@@ -87,7 +66,7 @@ data NotProcessingMessages = NotProcessingMessages { npmConn :: WriteOnlyConnect
 instance Connected NotProcessingMessages where connection = npmConn
 instance LoggedIn NotProcessingMessages
 
--- | The messages are being processed; ready state has not been recognised yet
+-- | The messages are being processed; ready state has not been recognised yet.
 data ProcessingMessages = ProcessingMessages { pmConn :: WriteOnlyConnection 
                                              , pmPlayers :: Players
                                              }
@@ -98,7 +77,7 @@ instance WithPlayers ProcessingMessages where
   players = pmPlayers
   withPlayers s ps = s { pmPlayers = ps }
                                               
--- | The player is refusing games and can't invite
+-- | The player is refusing games and can't invite.
 data NotReady = NotReady { nrConn :: WriteOnlyConnection
                          , nrPlayers :: Players
                          }
@@ -109,7 +88,7 @@ instance WithPlayers NotReady where
   players = nrPlayers
   withPlayers s ps = s { nrPlayers = ps }
 
--- | The player is ready to play but not playing
+-- | The player is ready to play but not playing.
 data NotPlaying = NotPlaying { npConn :: WriteOnlyConnection
                              , npPlayers :: Players
                              }
@@ -120,6 +99,7 @@ instance WithPlayers NotPlaying where
   players = npPlayers
   withPlayers s ps = s { npPlayers = ps }
 instance Ready NotPlaying
+
 
 -- * Data stored in states
 
@@ -144,11 +124,13 @@ data PlayerGameState = None
                      | Watching String
                      deriving (Eq, Show)
                    
+
 -- * Errors
 
 data TransitionError = LoginFailure { errMsg :: String }
                      | ConnectionFailure { errHost :: String, errPort :: String }
                      deriving (Eq, Show)
+
 
 -- * Transitions
 
@@ -209,6 +191,7 @@ setReady (NotReady conn ps) = toggleReady conn ps
 updateOrAddPlayer :: WithPlayers s => PlayerInfo -> s -> s
 updateOrAddPlayer p s = s `withPlayers` Map.insert (name p) p (players s)
 
+
 -- ** Helper functions used in transitions
 
 toggleReady :: WriteOnlyConnection -> Players -> IO ProcessingMessages
@@ -216,67 +199,3 @@ toggleReady conn ps = do
   sendCommand conn (Toggle FIBSClient.Ready)
   return $ ProcessingMessages conn ps
 
-
-
-{-
-
--- ** Constants
-
--- | The session state at the start of the application
-initialSessionState = Disconnected []
-
--- state manipulation functions
-
-logError :: String -> SessionState -> SessionState
-logError e st = case st of
-  LoggedOut c es     -> LoggedOut c (es ++ [e])
-  Disconnected es    -> Disconnected (es ++ [e])
-  LoggedIn c m es    -> LoggedIn c m (es ++ [e])  
-  ProcessingMessages c p es -> ProcessingMessages c p (es ++ [e])    
-  NotReady c p es  -> NotReady c p (es ++ [e])
-  Ready c p es     -> Ready c p (es ++ [e])
-
-withErrors :: SessionState -> [String] -> SessionState
-(LoggedOut c _) `withErrors` es = LoggedOut c es
-(Disconnected _) `withErrors` es = Disconnected es
-(LoggedIn c m _) `withErrors` es = LoggedIn c m es
-(ProcessingMessages c ps _) `withErrors` es = ProcessingMessages c ps es
-(NotReady c ps _) `withErrors` es = NotReady c ps es
-(Ready c ps _) `withErrors` es = Ready c ps es
-
-withPlayers :: SessionState -> Players -> SessionState
-(ProcessingMessages c _ es) `withPlayers` ps = ProcessingMessages c ps es
-(NotReady c _ es) `withPlayers` ps = NotReady c ps es
-(Ready c _ es) `withPlayers` ps = Ready c ps es
-
-
--- * Transitions
-
--- | Type alias to make it clear where a function returns a state transition. Session state transitionsx
--- might involve IO actions hence the result type is tainted with IO.
-type SessionStateTransition = SessionState -> IO SessionState
-
-
-
--- | Updates player info
-updatePlayer :: PlayerInfo -> SessionStateTransition
-updatePlayer p s@(ProcessingMessages _ _ _) = updatePlayer' p s 
-updatePlayer p s@(Ready _ _ _) = updatePlayer' p s
-updatePlayer p s@(NotReady _ _ _) = updatePlayer' p s
-updatePlayer _ s = logUnableToErrorIO "update player info" s
-updatePlayer' p s = do
-  let pname = name p
-      ps = players s
-      pm = Map.insert pname p (playerMap ps) 
-      pd = (Updated pname):(playerDeltas ps)
-      ps' = Players pm pd
-  return $ s `withPlayers` ps'
-
--- helper functions
-
-logErrorIO :: String -> SessionStateTransition
-logErrorIO e st = return $ logError e st
-
-logUnableToErrorIO :: String -> SessionStateTransition
-logUnableToErrorIO act s = logErrorIO ("unable to " ++ act ++ " in " ++ (stateName s) ++ " state") s
--}

@@ -1,5 +1,77 @@
-{-
+{-|
 -}
+module Controller(
+  controller
+) where
+import Model
+import View
+-- STM for session state:
+import Control.Concurrent.STM.TMVar
+import Control.Concurrent.STM (atomically)
+-- async processing: 
+import Control.Concurrent (forkIO)
+
+data SessionState = SSDisconnected Disconnected
+
+type ModelAndViewUpdate = TMVar SessionState -> View -> IO ()
+
+
+controller :: Disconnected -> View -> IO ()
+controller disconnected view = do
+  sessionTV <- newTMVarIO $ SSDisconnected disconnected
+  bindViewActions sessionTV view
+  
+bindViewActions :: TMVar SessionState -> View -> IO ()
+bindViewActions sessionTV view = do
+  setCommandHandler (logInItem $ sessionMenu view) (run loginU)
+  setCommandHandler (exitItem $ sessionMenu view) (run exitU)
+  where
+    run cmd = do forkIO $ cmd sessionTV view; return ()
+      
+-- ** Commands
+
+loginU :: ModelAndViewUpdate
+loginU sessTV view = do
+  disableLogIn view
+  sess <- atomically $ takeTMVar sessTV
+  case sess of
+    SSDisconnected d -> login defaultFIBSHost defaultFIBSPort "habaztest_a" "habaztest" d
+    _                -> showError ("unable to login in state " ++ (show sess)) view
+  atomically $ putTMVar sessTV sess'
+  case sess' of
+    (Disconnected d) -> do reportErrors sessTV view
+                           enableLogIn view
+    (LoggedIn c m e) -> do startMessageProcessingThread m
+                           (disableLogIn |> enableLogOut) view
+  where
+    startMessageProcessingThread msgs = do 
+      executeTransition startProcessingMessages sessTV
+      forkIO $ processMessage msgs `catch` errorHandler
+    processMessage (msg:msgs) = do
+      putStrLn (show msg)
+      (updateForMessage msg) sessTV view
+      if isTerminating msg then disconnectU sessTV view
+        else processMessage msgs
+    errorHandler _ = do
+      -- this is typically executed when a session is logged out when the server disconnects after a log
+      -- out but there is a backlog of messages our end and the message processing thread has not received
+      -- a terminating message. So far I only noticed it happening when a Log Out command is issued shortly
+      -- after a login. In this scenario we want to disconnect anyway so let's disconnect without reporting 
+      -- any errors to the user.
+      putStrLn "disconnecting in error handler"
+      disconnectU sessTV view 
+    
+disconnectU = do
+  sess <- atomically $ takeTMVar sessTV  
+  case sess of ->
+  disconnect 
+  enableLogIn |> disableLogOut |> disableReady
+
+exitU :: ModelAndViewUpdate
+exitU _ = closeMainWindow
+
+
+{-
 module Controller(
   controller
 ) where
@@ -12,15 +84,12 @@ import qualified FIBSClient.Messages as Msg (name, opponent, watching, ready, ra
 -- STM for session state:
 import Control.Concurrent.STM.TMVar
 import Control.Concurrent.STM (atomically)
--- async processing: 
-import Control.Concurrent (forkIO)
 -- message processing thread:
 import Control.Monad (forever)
 import Data.IORef
 
 -- * Composing Model transitions and View updates
 
-type ModelAndViewUpdate = TMVar SessionState -> View -> IO ()
 
 type StateDependentViewUpdate = SessionState -> ViewUpdate
 
@@ -49,9 +118,6 @@ executeTransition sessTrans sessTV = do
 
 logoutU :: ModelAndViewUpdate
 logoutU = logout <> (\s -> disableLogOut |> disableReady |> showInfoMessage (show s))
-
-exitU :: ModelAndViewUpdate
-exitU _ = closeMainWindow
 
 disconnectU :: ModelAndViewUpdate
 disconnectU = disconnect <> (\s -> enableLogIn |> disableLogOut |> disableReady)
@@ -139,7 +205,7 @@ reportErrors sessTV view = do
 
 -- * Binding view actions to model and view updates
 
-controller :: SessionState -> View -> IO ()
+controller :: Disconnected -> View -> IO ()
 controller session view = do
   sessionTV <- newTMVarIO session
   bindViewActions sessionTV view
@@ -153,3 +219,4 @@ bindViewActions sessionTV view = do
   where
     run cmd = do forkIO $ cmd sessionTV view; return ()
       
+-}

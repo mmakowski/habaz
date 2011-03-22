@@ -19,7 +19,7 @@ module View(
   disableLogOut, enableLogOut,
   disableReady, enableReady, setCheckedReady,
   closeMainWindow,
-  showInfoMessage, showErrorMessages,
+  showInfoMessage, showErrorMessage,
   showPlayers,
   -- * Construction
   createView
@@ -33,8 +33,7 @@ import Backgammon -- TODO: re-export from Model
 -- player map
 import Data.Map (Map)
 import qualified Data.Map as Map
--- Misc functions
-import Data.List (intercalate)
+
 
 -- * Representation
 
@@ -82,9 +81,8 @@ closeMainWindow v = close $ sessionWindow v
 showInfoMessage :: String -> ViewUpdate
 showInfoMessage msg v = infoDialog (sessionWindow v) "Info" msg
 
-showErrorMessages :: [String] -> ViewUpdate
-showErrorMessages [] _ = return ()
-showErrorMessages msgs v = errorDialog (sessionWindow v) "Error" (intercalate "\n\n" msgs)
+showErrorMessages :: String -> ViewUpdate
+showErrorMessages msg v = errorDialog (sessionWindow v) "Error" msg
 
 -- TODO: flickers! Try using Graphics.UI.WXCore
 showPlayers :: SessionState -> ViewUpdate
