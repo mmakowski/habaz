@@ -14,10 +14,13 @@ Testing
 _Automated tests_: 
 
 1. `cabal install test-framework`
-2. `cabal install TODO`
-3. `cabal configure --enable-tests`
-4. `cabal build`
-5. `cabal test` -- this is currently broken on Windows, see [ticket #843](http://hackage.haskell.org/trac/hackage/ticket/843)
+2. `cabal install test-framework-quickcheck2`
+3. `cabal install test-framework-hunit`
+4. `cabal configure --enable-tests`
+5. `cabal build`
+6. `cabal test` 
+
+Note that `cabal test` is currently broken on Windows, see [ticket #843](http://hackage.haskell.org/trac/hackage/ticket/843). Despite that you will still be able to see the test results in `dist/test/Habaz-0.1.0-all-tests.log`.
 
 _Interactive testing_: 
 

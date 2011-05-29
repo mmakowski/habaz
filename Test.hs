@@ -1,7 +1,12 @@
 module Main where
+import Test.Framework (Test, defaultMain)
+-- test modules
+import FIBSClientTests
 
-import System.Exit (exitFailure)
+main :: IO () 
+main = defaultMain tests
 
-main = do
-    putStrLn "This test always fails!"
-    exitFailure
+tests :: [Test]
+tests = [ parsingTopLevel
+        , individualMessageTypesParsing
+        ]

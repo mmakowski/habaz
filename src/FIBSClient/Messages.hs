@@ -26,9 +26,6 @@ module FIBSClient.Messages(
 import Control.Applicative
 import Data.List
 import Data.Time
-import Test.HUnit
-import Test.QuickCheck
-import TestUtils
 import System.Locale
 
 data RedoubleLimit
@@ -136,11 +133,6 @@ instance Applicative ParseResult where
   ParseFailure msg <*> _ = ParseFailure msg
   ParseSuccess f <*> sth = fmap f sth
 
-instance Arbitrary a => Arbitrary (ParseResult a) where
-  arbitrary = do a <- arbitrary
-                 msg <- arbitrary
-                 elements [ParseSuccess a, ParseFailure msg]
-
 -- interface functions
 
 -- | When applied to a string containing FIBS output yields a (lazy) list of parsed messages.
@@ -149,11 +141,6 @@ parseFIBSMessages :: String  -- ^ the string to parse, typically this will be re
 parseFIBSMessages str = 
   let (msg, rest) = parseFIBSMessage str 
   in (msg : parseFIBSMessages rest)
-
-test_parseFIBSMessagesIsLazy = 
-  assertEqual "parseFIBSMessages is lazy" 
-              [ParseSuccess LoginPrompt, ParseSuccess LoginPrompt]
-              (take 2 $ parseFIBSMessages $ cycle "login:")
 
 -- | Parses a single message from given string.
 parseFIBSMessage :: String                            -- ^ the string to parse
@@ -174,11 +161,6 @@ m `splitByFirst` c = splitByFirst' m c [] where
   splitByFirst' (m@(ParseSuccess msg):msgs) cond dropped = 
     if cond msg then (reverse dropped, msg, msgs) else splitByFirst' msgs cond (m:dropped)
 
-test_splitByFirstPreservesFailures = 
-  assertEqual ""
-              ([ParseFailure "0", ParseSuccess 1], 2, [ParseFailure "3"])
-              ([ParseFailure "0", ParseSuccess 1, ParseSuccess 2, ParseFailure "3"] `splitByFirst` (== 2))
-
 -- | Like 'splitByFirst', but with a limit on how many entries to check for an entry matching
 -- the predicate before giving up. Returns Nothing if a matching entry has not been found within
 -- the first n entries.
@@ -196,16 +178,6 @@ splitByFirstWithLimit m c limit = splitByFirstWithLimit' m c limit [] where
     if cond msg then Just (reverse dropped, msg, msgs) 
     else splitByFirstWithLimit' msgs cond (limit - 1) (m:dropped)
     
-test_splitByFirstWithLimitStopsAtLimit =
-  assertEqual "" Nothing (splitByFirstWithLimit [ps 1, ps 2, ps 3, ps 4] (== 3) 2)
-  where ps = ParseSuccess
-
-test_splitByFirstWithLimitFindsElementAtLimit =
-  assertEqual "" 
-              (Just ([ps 1, ps 2], 3, [ps 4]))
-              (splitByFirstWithLimit [ps 1, ps 2, ps 3, ps 4] (== 3) 3)
-  where ps = ParseSuccess
-        
 -- message predicates  
 
 isFreeForm (FreeForm _) = True
@@ -263,37 +235,6 @@ parseUnprefixedLine line rest = (ParseSuccess (recognise line), rest)
     recognise "                      Keep them coming...." = EndOfGoodbyeMessage
     recognise line = FreeForm line
 
-test_loginPromptParsedCorrectly = 
-  assertEqual "login prompt" 
-              (ParseSuccess LoginPrompt, []) 
-              (parseFIBSMessage "login:")
-
-test_systemParsedCorrectly =
-  "** Some system message.\r\n" `parsesTo` (System "Some system message.")
-
-test_readyOnParsedCorrectly =
-  "** You're now ready to invite or join someone.\r\n" `parsesTo` ReadyOn
-  
-test_readyOffParsedCorrectly = 
-  "** You're now refusing to play with someone.\r\n" `parsesTo` ReadyOff
-  
-test_blankLineIsSkipped = 
-  assertEqual "blank line is skipped"
-              (ParseSuccess (System "system message"), [])
-              (parseFIBSMessage "\r\n** system message")
-
-test_connectionTimeOutParsedCorrectly =
-  "Connection timed out." `parsesTo` ConnectionTimeOut
-  
-test_endOfGoodbyeMessageParsedCorrectly =
-  "                      Keep them coming....\r\n" `parsesTo` EndOfGoodbyeMessage
-
-test_freeFormParsedCorrectly =
-  assertEqual "free form"
-              (ParseSuccess (FreeForm "aleks and Ubaretzu start a 1 point match."), [])
-              (parseFIBSMessage "\r\naleks and Ubaretzu start a 1 point match.\r\n")
-              
-
 skip _ rest = parseFIBSMessage rest
 
 -- Welcome
@@ -303,9 +244,6 @@ parseWelcome line rest =
               <*> parseUTCTime lastLogin 
               <*> pure lastHost, 
       rest)
-
-test_welcomeParsedCorrectly = 
-  "1 username 1041253132 1.2.3.4\r\n" `parsesTo` (Welcome "username" (toUTCTime "1041253132") "1.2.3.4")
 
 -- OwnInfo
 parseOwnInfo line rest =
@@ -335,10 +273,6 @@ parseOwnInfo line rest =
               <*> pure timezone,
       rest)
 
-test_ownInfoParsedCorrectly = 
-  "2 myself 1 1 0 0 0 0 1 1 2396 0 1 0 1 3457.85 0 0 0 0 0 Australia/Melbourne\r\n" `parsesTo`
-  (OwnInfo "myself" True True False False False False True True 2396 False True False True 3457.85 False False (LimitedTo 0) False False "Australia/Melbourne")
-
 -- MOTD
 parseMOTD _ rest =
   let (motd, rest') = readMOTD "" rest
@@ -349,34 +283,6 @@ parseMOTD _ rest =
       in case msgNumAndRest first of 
         ((Just 4), _) -> let (_, rest') = firstLineAndRest rest in (acc, rest')
         _ -> readMOTD (acc ++ first) rest
-
-test_motdParsedCorrectly = 
-  ("3\r\n" ++ motd ++ "4\r\n\r\n") `parsesTo` (MOTD motd)
-  where 
-    motd = 
-      "+--------------------------------------------------------------------+\r\n\
-      \|                                                                    |\r\n\
-      \| It was a dark and stormy night in Oakland.  Outside, the rain      |\r\n\
-      \| came down in torrents.  Winds of 40MPH+ pounded at the windows,    |\r\n\
-      \| and whipped at trees, power lines, and anyone foolish enough       |\r\n\
-      \| to be outdoors.                                                    |\r\n\
-      \|                                                                    |\r\n\
-      \| In the middle of the night, I was awakened by a loud BEEP BEEP     |\r\n\
-      \| BEEP BEEP.  \"What is that?\" I thought groggily.  Ah!  We've had    |\r\n\
-      \| a power failure, and the computers are running on battery power.   |\r\n\
-      \|                                                                    |\r\n\
-      \| Curious to see how things were working, I crawled out of bed and   |\r\n\
-      \| stumbled downstairs to log in.  To my delight, people were         |\r\n\
-      \| merrily playing backgammon, oblivious to the fact that they had    |\r\n\
-      \| just ridden out a power failure that a few months ago would have   |\r\n\
-      \| shut down the server most ungracefully.                            |\r\n\
-      \|                                                                    |\r\n\
-      \| Thanks to all of the generous FIBSters who bought the UPS and      |\r\n\
-      \| made this possible!  And coming soon, as soon as I can get it      |\r\n\
-      \| built and deployed, a new (more reliable, and maybe faster)        |\r\n\
-      \| server.                                                            |\r\n\
-      \|                                                                    |\r\n\
-      \+--------------------------------------------------------------------+\r\n"
 
 -- WhoInfo
 parseWhoInfo line rest = parseWhoInfoWords (words line) rest
@@ -397,28 +303,11 @@ parseWhoInfoWords [name, opponent, watching, ready, away, rating, experience, id
    rest)
 parseWhoInfoWords w rest = (ParseFailure $ "unable to parse " ++ (show w) ++ " as WhoInfo", rest)
 
-test_whoInfoParsedCorrectly = 
-  "5 mgnu_advanced someplayer - 1 0 1912.15 827 8 1040515752 192.168.143.5 3DFiBs -" `parsesTo`
-  (WhoInfo "mgnu_advanced" (Just "someplayer") Nothing True False 1912.15 827 8 (toUTCTime "1040515752") "192.168.143.5" (Just "3DFiBs") Nothing)
-
-test_whoInfoParseFailure = 
-  ("5 " ++ badLine) `failsToParseWithErr` ("unable to parse " ++ (show $ words badLine) ++ " as WhoInfo")
-  where badLine = "mgnu_advanced someplayer - 1 0 1912.15 lubudubu logs in."
-
-test_endOfWhoInfoBlockIsSkipped =
-  "6\r\n\r\nsome message\r\n" `parsesTo` (FreeForm "some message")
-
 -- Login
 parseLogin = parseGenericNameMsg Login
 
-test_loginParsedCorrectly =
-  "7 someplayer someplayer logs in.\r\n" `parsesTo` (Login "someplayer" "someplayer logs in.")
-
 -- Logout
 parseLogout = parseGenericNameMsg Logout
-
-test_logoutParsedCorrectly = 
-  "8 someplayer someplayer drops connection.\r\n" `parsesTo` (Logout "someplayer" "someplayer drops connection.")
 
 -- Message
 parseMessage line rest =
@@ -429,49 +318,25 @@ parseMessage line rest =
               <*> pure msg,
       rest)
 
-test_messageParsedCorrectly = 
-  "9 someplayer 1041253132 I'll log in at 10pm if you want to finish that game.\r\n" `parsesTo` 
-  (Message "someplayer" (toUTCTime "1041253132") "I'll log in at 10pm if you want to finish that game.")
-
 -- MessageDelivered
 parseMessageDelivered name rest = 
   (ParseSuccess (MessageDelivered name), rest)
 
-test_messageDeliveredParsedCorrectly = 
-  "10 someplayer\r\n" `parsesTo` (MessageDelivered "someplayer")
-              
 -- MessageSaved
 parseMessageSaved name rest =
   (ParseSuccess (MessageSaved name), rest)
 
-test_messageSavedParsedCorrectly = 
-  "11 someplayer\r\n" `parsesTo` (MessageSaved "someplayer")
-              
 -- Says
 parseSays = parseGenericNameMsg Says
-
-test_saysParsedCorrectly = 
-  "12 someplayer Do you want to play a game?\r\n" `parsesTo` (Says "someplayer" "Do you want to play a game?")
 
 -- Shouts
 parseShouts = parseGenericNameMsg Shouts
 
-test_shoutsParsedCorrectly = 
-  "13 someplayer Anybody for a 5 point match?\r\n" `parsesTo` (Shouts "someplayer" "Anybody for a 5 point match?")
-
 -- Whispers
 parseWhispers = parseGenericNameMsg Whispers
 
-test_whispersParsedCorrectly = 
-  "14 someplayer I think he is using loaded dice  :-)\r\n" `parsesTo` 
-  (Whispers "someplayer" "I think he is using loaded dice  :-)")
-
 -- Kibitzes
 parseKibitzes = parseGenericNameMsg Kibitzes
-
-test_kibitzesParsedCorrectly = 
-  "15 someplayer G'Day and good luck from Hobart, Australia.\r\n" `parsesTo` 
-  (Kibitzes "someplayer" "G'Day and good luck from Hobart, Australia.")
 
 
 -- helper parsing functions
@@ -543,7 +408,3 @@ findPrefix (prefix:prefixes) str =
 stripCRLF :: String -> String
 stripCRLF str = if "\r\n" `isSuffixOf` str then init (init str) else str
 
--- helper test functions
-
-str `parsesTo` msg = assertEqual "" (ParseSuccess msg, []) (parseFIBSMessage str)
-str `failsToParseWithErr` err = assertEqual "" (ParseFailure err, []) (parseFIBSMessage str)
