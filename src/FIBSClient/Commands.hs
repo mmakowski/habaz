@@ -19,7 +19,6 @@ data Flag
 
 instance Test.QuickCheck.Arbitrary Flag where
   arbitrary = elements [Ready]
-  coarbitrary _ = id -- not needed
 
 data FIBSCommand
      = Toggle Flag
@@ -31,8 +30,6 @@ instance Test.QuickCheck.Arbitrary FIBSCommand where
       toggles = 
         do f <- arbitrary 
            return (Toggle f)
-                   
-  coarbitrary _ = id -- not needed
 
 
 -- | Yields a string representing given command in format understood by FIBS.

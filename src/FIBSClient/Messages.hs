@@ -140,7 +140,6 @@ instance Arbitrary a => Arbitrary (ParseResult a) where
   arbitrary = do a <- arbitrary
                  msg <- arbitrary
                  elements [ParseSuccess a, ParseFailure msg]
-  coarbitrary _ = id -- TODO: not needed?
 
 -- interface functions
 
