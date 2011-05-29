@@ -17,14 +17,14 @@ data Flag
      = Ready
      deriving (Eq, Show)
 
-instance Test.QuickCheck.Arbitrary Flag where
+instance Arbitrary Flag where
   arbitrary = elements [Ready]
 
 data FIBSCommand
      = Toggle Flag
      deriving (Eq, Show)
 
-instance Test.QuickCheck.Arbitrary FIBSCommand where
+instance Arbitrary FIBSCommand where
   arbitrary = toggles
     where 
       toggles = 

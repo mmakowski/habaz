@@ -1,13 +1,15 @@
-Name:           Habaz
-Version:        0.1.0
-Cabal-Version:  >= 1.2
-License:        MIT
-Author:         Maciek Makowski
-Synopsis:       A FIBS client
-Build-Type:     Simple
+name:           Habaz
+version:        0.1.0
+cabal-version:  >= 1.9.2
+license:        MIT
+author:         Maciek Makowski
+synopsis:       A FIBS client
+build-type:     Simple
 
-Executable habaz
-  Build-Depends:  array == 0.3.*,
+executable habaz
+  hs-source-dirs: src
+  main-is:        Main.hs
+  build-depends:  array == 0.3.*,
                   base == 4.3.*,
                   containers == 0.4.*,
                   HUnit == 1.2.*,
@@ -18,5 +20,8 @@ Executable habaz
                   stm == 2.2.*,
                   time == 1.2.*,
                   wx == 0.12.*
-  Main-Is:        Main.hs
-  Hs-Source-Dirs: src
+
+test-suite all-tests
+  type:           exitcode-stdio-1.0
+  main-is:    	  Test.hs
+  build-depends:  base
