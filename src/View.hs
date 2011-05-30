@@ -21,6 +21,7 @@ module View(
   closeMainWindow,
   showInfoMessage, showErrorMessages,
   showPlayers,
+  promptForUsernameAndPassword,
   -- * Construction
   createView
 ) where
@@ -59,11 +60,11 @@ setCommandHandler c h = set c [ on command := h ]
 
 -- * Actions
 
-type ViewUpdate = View -> IO ()
+type ViewUpdate a = View -> IO a
 
 -- | Composition of ViewUpdates
-(|>) :: ViewUpdate -> ViewUpdate -> ViewUpdate
-u1 |> u2 = \v -> do u1 v; u2 v
+(|>) :: ViewUpdate a -> ViewUpdate b -> ViewUpdate b
+u1 |> u2 = \v -> do u1 v; r <- u2 v; return r
 
 disableLogIn = setMenuEnabled logInItem False
 enableLogIn = setMenuEnabled logInItem True
@@ -79,19 +80,41 @@ setMenuBoolProp prop itemAcc b v = set (itemAcc $ sessionMenu v) [ prop := b ]
 
 closeMainWindow v = close $ sessionWindow v
 
-showInfoMessage :: String -> ViewUpdate
+showInfoMessage :: String -> ViewUpdate ()
 showInfoMessage msg v = infoDialog (sessionWindow v) "Info" msg
 
-showErrorMessages :: [String] -> ViewUpdate
+showErrorMessages :: [String] -> ViewUpdate ()
 showErrorMessages [] _ = return ()
 showErrorMessages msgs v = errorDialog (sessionWindow v) "Error" (intercalate "\n\n" msgs)
 
 -- TODO: flickers! Try using Graphics.UI.WXCore
-showPlayers :: SessionState -> ViewUpdate
+showPlayers :: SessionState -> ViewUpdate ()
 showPlayers ss v = set (playerList v) [ items := map (\p -> [pnstr $ name p, show $ rating p]) 
                                                      (Map.elems $ playerMap $ players ss) 
                                       ]
 
+promptForUsernameAndPassword :: ViewUpdate (Maybe (String, String))
+promptForUsernameAndPassword v = do 
+  d <- dialog (sessionWindow v) [ text := "Log In" ]
+  usernameInput <- textEntry d []
+  passwordInput <- textEntry d []
+  ok <- button d [ text := "&OK" ]
+  cancel <- button d [ text := "&Cancel" ]
+  set d [ layout := margin 10 $ column 5 [
+             grid 5 5 [[label "user name", widget usernameInput],
+                       [label "password", widget passwordInput]],
+             row 5 [ widget ok, widget cancel]
+             ]
+        ]
+  showModal d (setStopActions ok cancel usernameInput passwordInput)
+  where
+    setStopActions ok cancel usernameInput passwordInput stop = do
+      set ok [ on command := do
+                  username <- get usernameInput text
+                  password <- get passwordInput text
+                  stop (Just (username, password)) ]
+      set cancel [ on command := stop Nothing ]
+        
 -- TODO: displaySession :: SessionState -> ViewUpdate
 
 -- * Construction

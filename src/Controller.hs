@@ -22,7 +22,7 @@ import Data.IORef
 
 type ModelAndViewUpdate = TMVar SessionState -> View -> IO ()
 
-type StateDependentViewUpdate = SessionState -> ViewUpdate
+type StateDependentViewUpdate = SessionState -> ViewUpdate ()
 
 -- | A StateDependentViewUpdate that doesn't do anything
 noOpSDVU :: StateDependentViewUpdate
@@ -66,14 +66,19 @@ noOpU _ _ = return ()
 
 loginU :: ModelAndViewUpdate
 loginU sessTV view = do
-  disableLogIn view
-  sess' <- executeTransition (login defaultFIBSHost defaultFIBSPort "habaztest_a" "habaztest") sessTV
-  case sess' of
-    (Disconnected e) -> do reportErrors sessTV view
-                           enableLogIn view
-    (LoggedIn c m e) -> do startMessageProcessingThread m
-                           (disableLogIn |> enableLogOut) view
+  maybeUp <- promptForUsernameAndPassword view
+  case maybeUp of
+    Just (username, password) -> doLogin username password -- TODO: validate that they are not empty
+    Nothing -> return ()
   where
+    doLogin username password = do
+      disableLogIn view
+      sess' <- executeTransition (login defaultFIBSHost defaultFIBSPort username password) sessTV
+      case sess' of
+        (Disconnected e) -> do reportErrors sessTV view
+                               enableLogIn view
+        (LoggedIn c m e) -> do startMessageProcessingThread m
+                               (disableLogIn |> enableLogOut) view
     startMessageProcessingThread msgs = do 
       executeTransition startProcessingMessages sessTV
       forkIO $ processMessage msgs `catch` errorHandler
