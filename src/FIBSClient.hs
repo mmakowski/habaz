@@ -3,6 +3,8 @@ A high-level interface to FIBS. Usage:
 
 * call 'connect' to establish a connection
 
+* call 'createAccount' to create an account
+
 * call 'login' to log in
 
 * call 'readMessages' to obtain a list of parsed FIBS messages and a write-only version of connection. 
@@ -30,10 +32,12 @@ module FIBSClient(
   isTerminating,
   -- * Misc Data Types
   LoginStatus (..),
+  AccountCreationStatus (..),
   ParseResult (..),
   -- * Functions
   connect,
   disconnect,
+  createAccount,
   login,
   logout,
   readMessages,
@@ -48,7 +52,6 @@ import Network.Socket hiding (connect, send)
 import qualified Network.Socket (connect)
 import Network.BSD
 import System.IO
-import Test.HUnit
 
 -- * Constants
 
@@ -76,6 +79,8 @@ instance Connection WriteOnlyConnection where handle (WOConn h) = h
 data LoginStatus = LoginSuccess
                  | LoginFailure String
                    
+data AccountCreationStatus = AccountCreationSuccess
+                           | AccountCreationFailure String
 
 -- * Interface Functions
 
@@ -83,34 +88,78 @@ data LoginStatus = LoginSuccess
 connect :: HostName               -- ^ The host to connect to
         -> String                 -- ^ Port number
         -> IO ReadWriteConnection -- ^ The opened connnection
-connect hostname port =
-  do addrinfos <- withSocketsDo $ getAddrInfo Nothing (Just hostname) (Just port)
-     let serveraddr = head addrinfos
-     sock <- socket (addrFamily serveraddr) Stream defaultProtocol
-     setSocketOption sock KeepAlive 1
-     Network.Socket.connect sock (addrAddress serveraddr)
-     h <- socketToHandle sock ReadWriteMode
-     return $ RWConn h
+connect hostname port = do 
+  addrinfos <- withSocketsDo $ getAddrInfo Nothing (Just hostname) (Just port)
+  let serveraddr = head addrinfos
+  sock <- socket (addrFamily serveraddr) Stream defaultProtocol
+  setSocketOption sock KeepAlive 1
+  Network.Socket.connect sock (addrAddress serveraddr)
+  h <- socketToHandle sock ReadWriteMode
+  return $ RWConn h
 
 -- | Disconnects from FIBS.
 disconnect :: Connection c => c -> IO ()
 disconnect conn = hClose $ handle conn
 
+-- | Creates a new FIBS account.
+createAccount :: HostName                 -- ^ the host to create account on
+              -> String                   -- ^ port number
+              -> String                   -- ^ user name
+              -> String                   -- ^ password
+              -> IO AccountCreationStatus -- ^ the status of account creation attempt
+createAccount hostname port username password = do 
+  conn <- connect hostname port
+  let h = handle conn
+  readUntil ["login:"] h
+  send h $ "guest"
+  result <- setUsername h
+  disconnect conn
+  return result
+  where
+    setUsername h = do
+      readUntil ["> "] h
+      send h $ "name " ++ username
+      line <- readUntil ["\n"] h
+      case fst (parseFIBSMessage line) of
+        ParseFailure msg            -> return $ AccountCreationFailure $ "parse error: " ++ msg        
+        ParseSuccess (System msg)   -> return $ AccountCreationFailure msg
+        ParseSuccess (FreeForm msg) -> if msg == "Your name will be " ++ username then setPassword h
+                                       else return $ AccountCreationFailure msg
+    setPassword h = do
+      readUntil ["Please give your password: "] h
+      send h password
+      readUntil ["\n"] h
+      line <- readUntil [": ", "\n"] h
+      case fst (parseFIBSMessage line) of
+        ParseFailure msg            -> return $ AccountCreationFailure $ "parse error: " ++ msg        
+        ParseSuccess (System msg)   -> return $ AccountCreationFailure msg
+        ParseSuccess (FreeForm msg) -> if msg == "Please retype your password: " then confirmPassword h
+                                       else return $ AccountCreationFailure msg
+    confirmPassword h = do
+      send h password
+      readUntil ["\n"] h
+      line <- readUntil [": ", "\n"] h
+      return $ case fst (parseFIBSMessage line) of
+        ParseFailure msg            -> AccountCreationFailure $ "parse error: " ++ msg        
+        ParseSuccess (System msg)   -> AccountCreationFailure msg
+        ParseSuccess (FreeForm msg) -> if msg == "You are registered." then AccountCreationSuccess
+                                       else AccountCreationFailure msg
+      
 -- | Attempts to log in to FIBS.
 login :: ReadWriteConnection     -- ^ a FIBS connection
       -> String                  -- ^ client name
       -> String                  -- ^ user name
       -> String                  -- ^ password
       -> IO LoginStatus          -- ^ the status of loggin attempt
-login (RWConn h) clientname username password = 
-  do readUntil ["login:"] h
-     send h $ "login " ++ clientname ++ " " ++ clipVersion ++ " " ++ username ++ " " ++ password
-     readUntil ["\n"] h
-     line <- readUntil ["\n", "login:"] h
-     return $ case fst (parseFIBSMessage line) of
-       ParseFailure msg             -> LoginFailure $ "parse error: " ++ msg
-       ParseSuccess LoginPrompt     -> LoginFailure "invalid login details"
-       ParseSuccess (Welcome _ _ _) -> LoginSuccess
+login (RWConn h) clientname username password = do 
+  readUntil ["login:"] h
+  send h $ "login " ++ clientname ++ " " ++ clipVersion ++ " " ++ username ++ " " ++ password
+  readUntil ["\n"] h
+  line <- readUntil ["\n", "login:"] h
+  return $ case fst (parseFIBSMessage line) of
+    ParseFailure msg             -> LoginFailure $ "parse error: " ++ msg
+    ParseSuccess LoginPrompt     -> LoginFailure "invalid login details"
+    ParseSuccess (Welcome _ _ _) -> LoginSuccess
      
 -- | Logs out from FIBS.
 logout :: Connection c
@@ -148,15 +197,16 @@ readUntil termStrs h = liftM reverse $ loop []
     loop acc = do
       input <- hGetChar h
       --putStr $ if isTerminated (input:acc) rTermStrs then reverse (input:acc) else ""
+      --putStr [input]
       (if isTerminated (input:acc) rTermStrs then return else loop) (input:acc)
       
-readLine ::Handle -> IO String
+readLine :: Handle -> IO String
 readLine = readUntil ["\n", "login:"] 
 
 send :: Handle -> String -> IO ()
-send h cmd =
-  do hPutStrLn h cmd
-     hFlush h
+send h cmd = do 
+  hPutStrLn h cmd
+  hFlush h
 
 -- test helpers
 
@@ -170,6 +220,13 @@ test =
      logout conn'
      disconnect conn'
 
+testCreateAccount suffix = do 
+  result <- createAccount defaultFIBSHost defaultFIBSPort ("habaztest_" ++ suffix) "habaztest"
+  putStrLn (toMsg result)
+  where 
+    toMsg AccountCreationSuccess = "success!"
+    toMsg (AccountCreationFailure msg) = ">" ++ msg ++ "<"
+    
 playWithMmakowski = 
   do conn <- connect defaultFIBSHost defaultFIBSPort
      login conn "Habaź_v0.1.0" "habaztest_a" "habaztest"
@@ -186,44 +243,6 @@ playWithMmakowski =
          putStrLn (show system)
      logout conn'
      disconnect conn'
-
-
--- tests
-
-testAccount = "habaztest_a"
-testPassword = "habaztest"
-
--- Note: this test will normally be disabled because there is no way to remove 
--- a test account from FIBS once it was created. If other tests fail because
--- the test account does not exist then enable this test to re-create the account
-{-
-atest_createAccount = 
-  do conn <- connect defaultFIBSHost defaultFIBSPort
-     loginStatus <- login conn "habaz-test" testAccount testPassword
-     result <- createTestAccount loginStatus conn
-     disconnect conn
-     return result
-  where
-    createTestAccount (LoginFailure "invalid login details") _ = assertBool "TODO" False
-    createTestAccount (LoginFailure reason) _ = assertFailure reason
-    createTestAccount LoginSuccess conn = 
-      do
-        logout conn
-        assertFailure $ testAccount ++ " is already a valid FIBS account, can't test creation"
--}    
-{-
-test_accountCreation = 
-  do conn <- connect defaultFIBSHost defaultFIBSPort
-     --readUntil "login:" conn
-     send conn "guest\n"
-     str <- readUntil "!!!" conn
-     -- putStr str
-     send conn "bye\n"
-     disconnect conn
-     return $ assertBool "not logged in as guest" $ isInfixOf "You just logged in as guest" str
-
--}
-
 
 
 
