@@ -1,11 +1,18 @@
 module FIBSClientTests where
+import Data.Char
+import Data.Maybe
+import Data.Time
+import System.Locale
+import System.Random
 import Test.Framework (testGroup)
-import Test.Framework.Providers.HUnit
+import Test.Framework.Providers.HUnit (testCase)
+import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.HUnit
 import Test.QuickCheck
-import TestUtils
 
+import FIBSClient.Commands
 import FIBSClient.Messages
+
 
 -- TODO: define where it's needed
 instance Arbitrary a => Arbitrary (ParseResult a) where
@@ -131,3 +138,23 @@ individualMessageTypesParsing = testGroup "FIBS message parsing of individual me
     str `parsesTo` msg = assertEqual "" (ParseSuccess msg, []) (parseFIBSMessage str)
     
     str `failsToParseWithErr` err = assertEqual "" (ParseFailure err, []) (parseFIBSMessage str)
+
+    toUTCTime str = (fromJust $ parseTime defaultTimeLocale "%s" str)
+
+
+instance Arbitrary Flag where
+  arbitrary = elements [Ready]
+
+instance Arbitrary FIBSCommand where
+  arbitrary = toggles
+    where 
+      toggles = 
+        do f <- arbitrary 
+           return (Toggle f)
+
+commandFormatting = testGroup "FIBS command formatting" [
+  testProperty "formatted toggle is 'toggle <flag>'" formatCommandToggleFlag
+  ]
+  where
+    formatCommandToggleFlag cmd@(Toggle flag) = "toggle " ++ (map toLower $ show flag) == formatCommand cmd
+

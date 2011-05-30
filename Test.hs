@@ -9,4 +9,5 @@ main = defaultMain tests
 tests :: [Test]
 tests = [ parsingTopLevel
         , individualMessageTypesParsing
+        , commandFormatting
         ]
