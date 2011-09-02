@@ -111,7 +111,7 @@ createAccount hostname port username password = do
   conn <- connect hostname port
   let h = handle conn
   readUntil ["login:"] h
-  send h $ "guest"
+  send h "guest"
   result <- setUsername h
   disconnect conn
   return result
@@ -165,7 +165,7 @@ login (RWConn h) clientname username password = do
 logout :: Connection c
        => c            -- ^ a FIBS connection
        -> IO ()
-logout conn = send (handle conn) $ "bye"
+logout conn = send (handle conn) "bye"
     
 -- | Yields a stream of parsed FIBS messages and makes the connection write-only.
 readMessages :: ReadWriteConnection          -- ^ a FIBS connection
@@ -174,7 +174,7 @@ readMessages :: ReadWriteConnection          -- ^ a FIBS connection
              -- oonnection that should be used from now on.
 readMessages (RWConn h) = do
   msgStr <- hGetContents h
-  return $ (parseFIBSMessages msgStr, WOConn h)
+  return (parseFIBSMessages msgStr, WOConn h)
 
 -- | Sends a command to FIBS.
 sendCommand :: WriteOnlyConnection   -- ^ a FIBS connection

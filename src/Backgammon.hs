@@ -38,10 +38,10 @@ empty :: Peg
 empty = Peg Nothing 0
 
 white :: Int -> Peg
-white n = Peg (Just White) n
+white = Peg (Just White)
 
 black :: Int -> Peg
-black n = Peg (Just Black) n
+black = Peg (Just Black)
 
 emptyBar :: Map.Map Player Int
 emptyBar = Map.fromList [(White, 0), (Black, 0)]

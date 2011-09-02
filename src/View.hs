@@ -64,7 +64,7 @@ type ViewUpdate a = View -> IO a
 
 -- | Composition of ViewUpdates
 (|>) :: ViewUpdate a -> ViewUpdate b -> ViewUpdate b
-u1 |> u2 = \v -> do u1 v; r <- u2 v; return r
+u1 |> u2 = \v -> do u1 v; u2 v
 
 disableLogIn = setMenuEnabled logInItem False
 enableLogIn = setMenuEnabled logInItem True
@@ -164,16 +164,16 @@ homeWidthRatio = 0.08
 paintBoard :: Board -> DC a -> Rect -> IO ()
 paintBoard board dc viewArea = 
   do let quarterHeight = rectHeight viewArea `div` 2
-         barWidth = round $ (fromIntegral (rectWidth viewArea)) * barWidthRatio
-         homeWidth = round $ (fromIntegral (rectWidth viewArea)) * homeWidthRatio
+         barWidth = round $ fromIntegral (rectWidth viewArea) * barWidthRatio
+         homeWidth = round $ fromIntegral (rectWidth viewArea) * homeWidthRatio
          quarterWidth = (rectWidth viewArea - barWidth - homeWidth) `div` 2
          quarterOrigins = [Point (quarterWidth + barWidth) (quarterHeight * 2),
                            Point 0 (quarterHeight * 2),
                            Point 0 0,
                            Point (quarterWidth + barWidth) 0]
          pegSets = map (map (pegs board !)) [[1..6], [7..12], [13..18], [19..24]]
-         drawQWPegsFromOrig = \(p, o) -> drawQuarter p dc o (if pointY o > 0 then -1 else 1) 
-                                                     quarterWidth quarterHeight
+         drawQWPegsFromOrig (p, o) = drawQuarter p dc o (if pointY o > 0 then -1 else 1) 
+                                                 quarterWidth quarterHeight
      mapM_ drawQWPegsFromOrig (pegSets `zip` quarterOrigins)
      
 drawQuarter :: [Peg] -> DC a -> Point -> Int -> Int -> Int -> IO ()

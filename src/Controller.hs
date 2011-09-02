@@ -84,7 +84,7 @@ loginU sessTV view = do
       forkIO $ processMessage msgs `catch` errorHandler
     processMessage (msg:msgs) = do
       putStrLn (show msg)
-      (updateForMessage msg) sessTV view
+      updateForMessage msg sessTV view
       if isTerminating msg then disconnectU sessTV view
         else processMessage msgs
     errorHandler _ = do
@@ -113,7 +113,7 @@ updateForMessage (ParseSuccess msg) = case msg of
 recogniseReadyU :: Bool -> ModelAndViewUpdate
 recogniseReadyU ready sessTV view = do
   executeTransition (if ready then recogniseReady else recogniseNotReady) sessTV
-  (enableReady |> (setCheckedReady ready)) view
+  (enableReady |> setCheckedReady ready) view
 
 updatePlayerU :: FIBSMessage -> ModelAndViewUpdate
 updatePlayerU wi sessTV view = do 
@@ -126,9 +126,9 @@ whoInfoToPlayerInfo :: FIBSMessage -> PlayerInfo
 whoInfoToPlayerInfo wi =
   PlayerInfo (PlayerName (Msg.name wi)) (Msg.ready wi) (gameState wi) (Msg.rating wi) (Msg.experience wi)
   where 
-    gameState wi = case (Msg.opponent wi) of
+    gameState wi = case Msg.opponent wi of
       Just p -> Playing p
-      Nothing -> case (Msg.watching wi) of
+      Nothing -> case Msg.watching wi of
         Just p -> Watching p
         Nothing -> None
   

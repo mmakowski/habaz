@@ -23,7 +23,7 @@ data FIBSCommand
 -- | Yields a string representing given command in format understood by FIBS.
 formatCommand :: FIBSCommand -- ^ the command to format
               -> String      -- ^ FIBS command string
-formatCommand (Toggle flag) = "toggle " ++ (formatFlag flag)
+formatCommand (Toggle flag) = "toggle " ++ formatFlag flag
 
 formatFlag :: Flag -> String
 formatFlag = map toLower . show

@@ -235,7 +235,7 @@ parseUnprefixedLine line rest = (ParseSuccess (recognise line), rest)
     recognise "                      Keep them coming...." = EndOfGoodbyeMessage
     recognise line = FreeForm line
 
-skip _ rest = parseFIBSMessage rest
+skip _ = parseFIBSMessage
 
 -- Welcome
 parseWelcome line rest =
@@ -285,7 +285,7 @@ parseMOTD _ rest =
         _ -> readMOTD (acc ++ first) rest
 
 -- WhoInfo
-parseWhoInfo line rest = parseWhoInfoWords (words line) rest
+parseWhoInfo line = parseWhoInfoWords (words line)
 parseWhoInfoWords [name, opponent, watching, ready, away, rating, experience, idle, 
                    login, hostname, client, email] rest = 
   (WhoInfo <$> pure name
