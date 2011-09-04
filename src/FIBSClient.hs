@@ -116,6 +116,10 @@ createAccount hostname port username password = do
   disconnect conn
   return result
   where
+    sendPasswordAndReadLine h = do
+      send h password
+      readUntil ["\n"] h
+      readUntil [": ", "\n"] h
     setUsername h = do
       readUntil ["> "] h
       send h $ "name " ++ username
@@ -127,18 +131,14 @@ createAccount hostname port username password = do
                                        else return $ AccountCreationFailure msg
     setPassword h = do
       readUntil ["Please give your password: "] h
-      send h password
-      readUntil ["\n"] h
-      line <- readUntil [": ", "\n"] h
+      line <- sendPasswordAndReadLine h
       case fst (parseFIBSMessage line) of
         ParseFailure msg            -> return $ AccountCreationFailure $ "parse error: " ++ msg        
         ParseSuccess (System msg)   -> return $ AccountCreationFailure msg
         ParseSuccess (FreeForm msg) -> if msg == "Please retype your password: " then confirmPassword h
                                        else return $ AccountCreationFailure msg
     confirmPassword h = do
-      send h password
-      readUntil ["\n"] h
-      line <- readUntil [": ", "\n"] h
+      line <- sendPasswordAndReadLine h
       return $ case fst (parseFIBSMessage line) of
         ParseFailure msg            -> AccountCreationFailure $ "parse error: " ++ msg        
         ParseSuccess (System msg)   -> AccountCreationFailure msg
@@ -216,7 +216,7 @@ test =
   do conn <- connect defaultFIBSHost defaultFIBSPort
      login conn "Habaź" "habaztest_a" "habaztest"
      (msgs, conn') <- readMessages conn
-     take 30 <$> (return msgs) >>= mapM_ (putStrLn . show)
+     take 30 <$> return msgs >>= mapM_ print
      logout conn'
      disconnect conn'
 
@@ -232,15 +232,15 @@ playWithMmakowski =
      login conn "Habaź_v0.1.0" "habaztest_a" "habaztest"
      (msgs, conn') <- readMessages conn
      let (dropped, ownInfo, msgs') = msgs `splitByFirst` isOwnInfo
-     putStrLn (show ownInfo)
-     putStrLn (show dropped)
+     print ownInfo
+     print dropped
      if ready ownInfo
        then putStrLn "ready already!"
        else do 
          sendCommand conn' (Toggle Ready)
          let (dropped', system, msgs'') = msgs' `splitByFirst` isSystem
-         putStrLn (show dropped')         
-         putStrLn (show system)
+         print dropped'         
+         print system
      logout conn'
      disconnect conn'
 

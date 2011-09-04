@@ -83,7 +83,7 @@ loginU sessTV view = do
       executeTransition startProcessingMessages sessTV
       forkIO $ processMessage msgs `catch` errorHandler
     processMessage (msg:msgs) = do
-      putStrLn (show msg)
+      print msg
       updateForMessage msg sessTV view
       if isTerminating msg then disconnectU sessTV view
         else processMessage msgs

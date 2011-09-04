@@ -192,8 +192,8 @@ drawQuarter pegs dc origin orientation width height =
 drawPeg :: Peg -> DC a -> Point -> Int -> Int -> Int -> Color -> IO ()
 drawPeg peg dc origin orientation width height colour =
   do polygon dc [origin, 
-                 (pointAdd origin (Point width 0)), 
-                 (pointAdd origin (Point (width `div` 2) (height * orientation)))] 
+                 pointAdd origin (Point width 0), 
+                 pointAdd origin (Point (width `div` 2) (height * orientation))] 
              [brushColor := colour]
      let pieceColour = case owner peg of
            Just White -> white

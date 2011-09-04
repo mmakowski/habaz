@@ -215,7 +215,7 @@ parseLine (Just n) = case n of
   14 -> parseWhispers
   15 -> parseKibitzes
   --16 -> parseYouSay
-  _ -> \line rest -> (ParseFailure $ "unrecognised message type id " ++ (show n) ++ "; rest of line: '" ++ line ++"'", 
+  _ -> \line rest -> (ParseFailure $ "unrecognised message type id " ++ show n ++ "; rest of line: '" ++ line ++"'", 
                       rest)
 
 -- failed login
@@ -281,8 +281,8 @@ parseMOTD _ rest =
     readMOTD acc str = 
       let (first, rest) = firstLineAndRest str
       in case msgNumAndRest first of 
-        ((Just 4), _) -> let (_, rest') = firstLineAndRest rest in (acc, rest')
-        _ -> readMOTD (acc ++ first) rest
+        (Just 4, _) -> let (_, rest') = firstLineAndRest rest in (acc, rest')
+        _           -> readMOTD (acc ++ first) rest
 
 -- WhoInfo
 parseWhoInfo line = parseWhoInfoWords (words line)
@@ -301,7 +301,7 @@ parseWhoInfoWords [name, opponent, watching, ready, away, rating, experience, id
            <*> parseMaybeString client
            <*> parseMaybeString email,
    rest)
-parseWhoInfoWords w rest = (ParseFailure $ "unable to parse " ++ (show w) ++ " as WhoInfo", rest)
+parseWhoInfoWords w rest = (ParseFailure $ "unable to parse " ++ show w ++ " as WhoInfo", rest)
 
 -- Login
 parseLogin = parseGenericNameMsg Login
@@ -403,7 +403,7 @@ firstAndRest terminators retainTerm str =
 findPrefix :: [String] -> String -> Maybe String
 findPrefix [] str = Nothing
 findPrefix (prefix:prefixes) str = 
-  if prefix `isPrefixOf` str then (Just prefix) else findPrefix prefixes str
+  if prefix `isPrefixOf` str then Just prefix else findPrefix prefixes str
 
 stripCRLF :: String -> String
 stripCRLF str = if "\r\n" `isSuffixOf` str then init (init str) else str

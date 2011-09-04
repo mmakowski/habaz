@@ -23,32 +23,32 @@ instance Arbitrary a => Arbitrary (ParseResult a) where
 
 parsingTopLevel = testGroup "FIBS message stream parsing and splitting" [
   testCase "parseFIBSMessages is lazy" (
-     [ParseSuccess LoginPrompt, ParseSuccess LoginPrompt] @=? (take 2 $ parseFIBSMessages $ cycle "login:")),
+     [ParseSuccess LoginPrompt, ParseSuccess LoginPrompt] @=? (take 2 . parseFIBSMessages . cycle) "login:"),
 
   testCase "splitByFirst preserves failures" (
     ([ParseFailure "0", ParseSuccess 1], 2, [ParseFailure "3"]) @=?
     ([ParseFailure "0", ParseSuccess 1, ParseSuccess 2, ParseFailure "3"] `splitByFirst` (== 2))),
 
   testCase "splitByFirst with limit stops at limit" (
-    Nothing @=? (splitByFirstWithLimit [ParseSuccess 1, ParseSuccess 2, ParseSuccess 3, ParseSuccess 4] (== 3) 2)),
+    Nothing @=? splitByFirstWithLimit [ParseSuccess 1, ParseSuccess 2, ParseSuccess 3, ParseSuccess 4] (== 3) 2),
 
   testCase "splitByFirst with limit finds element at limit" (
-    (Just ([ParseSuccess 1, ParseSuccess 2], 3, [ParseSuccess 4])) @=?
-    (splitByFirstWithLimit [ParseSuccess 1, ParseSuccess 2, ParseSuccess 3, ParseSuccess 4] (== 3) 3))
+    Just ([ParseSuccess 1, ParseSuccess 2], 3, [ParseSuccess 4]) @=?
+    splitByFirstWithLimit [ParseSuccess 1, ParseSuccess 2, ParseSuccess 3, ParseSuccess 4] (== 3) 3)
   ]
 
 
 individualMessageTypesParsing = testGroup "FIBS message parsing of individual message types" [
   testCase "login prompt" ("login:" `parsesTo` LoginPrompt),
   
-  testCase "system message" ("** Some system message.\r\n" `parsesTo` (System "Some system message.")),
+  testCase "system message" ("** Some system message.\r\n" `parsesTo` System "Some system message."),
   
   testCase "ready on" ("** You're now ready to invite or join someone.\r\n" `parsesTo` ReadyOn),
   
   testCase "ready off" ("** You're now refusing to play with someone.\r\n" `parsesTo` ReadyOff),
   
   testCase "blank line before system message is skipped" 
-    ("\r\n** system message" `parsesTo` (System "system message")),
+    ("\r\n** system message" `parsesTo` System "system message"),
 
   testCase "connection time out" ("Connection timed out." `parsesTo` ConnectionTimeOut),
   
@@ -57,55 +57,55 @@ individualMessageTypesParsing = testGroup "FIBS message parsing of individual me
 
   testCase "free form"
     ("\r\naleks and Ubaretzu start a 1 point match.\r\n" `parsesTo` 
-     (FreeForm "aleks and Ubaretzu start a 1 point match.")),
+     FreeForm "aleks and Ubaretzu start a 1 point match."),
               
   testCase "welcome"
-    ("1 username 1041253132 1.2.3.4\r\n" `parsesTo` (Welcome "username" (toUTCTime "1041253132") "1.2.3.4")),
+    ("1 username 1041253132 1.2.3.4\r\n" `parsesTo` Welcome "username" (toUTCTime "1041253132") "1.2.3.4"),
      
   testCase "own info"
     ("2 myself 1 1 0 0 0 0 1 1 2396 0 1 0 1 3457.85 0 0 0 0 0 Australia/Melbourne\r\n" `parsesTo`
-     (OwnInfo "myself" True True False False False False True True 2396 False True False True 3457.85 False False (LimitedTo 0) False False "Australia/Melbourne")),
+     OwnInfo "myself" True True False False False False True True 2396 False True False True 3457.85 False False (LimitedTo 0) False False "Australia/Melbourne"),
   
-  testCase "motd" (("3\r\n" ++ motd ++ "4\r\n\r\n") `parsesTo` (MOTD motd)),
+  testCase "motd" (("3\r\n" ++ motd ++ "4\r\n\r\n") `parsesTo` MOTD motd),
   
   testCase "who info"
     ("5 mgnu_advanced someplayer - 1 0 1912.15 827 8 1040515752 192.168.143.5 3DFiBs -" `parsesTo`
-     (WhoInfo "mgnu_advanced" (Just "someplayer") Nothing True False 1912.15 827 8 (toUTCTime "1040515752") "192.168.143.5" (Just "3DFiBs") Nothing)),
+     WhoInfo "mgnu_advanced" (Just "someplayer") Nothing True False 1912.15 827 8 (toUTCTime "1040515752") "192.168.143.5" (Just "3DFiBs") Nothing),
 
   testCase "who info parse failure"
     (("5 " ++ badWhoInfoLine) `failsToParseWithErr` 
-     ("unable to parse " ++ (show $ words badWhoInfoLine) ++ " as WhoInfo")),
+     ("unable to parse " ++ (show . words) badWhoInfoLine ++ " as WhoInfo")),
 
-  testCase "end of who info block is skipped" ("6\r\n\r\nsome message\r\n" `parsesTo` (FreeForm "some message")),
+  testCase "end of who info block is skipped" ("6\r\n\r\nsome message\r\n" `parsesTo` FreeForm "some message"),
 
-  testCase "login" ("7 someplayer someplayer logs in.\r\n" `parsesTo` (Login "someplayer" "someplayer logs in.")),
+  testCase "login" ("7 someplayer someplayer logs in.\r\n" `parsesTo` Login "someplayer" "someplayer logs in."),
 
   testCase "logout" 
     ("8 someplayer someplayer drops connection.\r\n" `parsesTo` 
-     (Logout "someplayer" "someplayer drops connection.")),
+     Logout "someplayer" "someplayer drops connection."),
 
   testCase "message" 
     ("9 someplayer 1041253132 I'll log in at 10pm if you want to finish that game.\r\n" `parsesTo` 
-     (Message "someplayer" (toUTCTime "1041253132") "I'll log in at 10pm if you want to finish that game.")),
+     Message "someplayer" (toUTCTime "1041253132") "I'll log in at 10pm if you want to finish that game."),
 
-  testCase "message delivered" ("10 someplayer\r\n" `parsesTo` (MessageDelivered "someplayer")),
+  testCase "message delivered" ("10 someplayer\r\n" `parsesTo` MessageDelivered "someplayer"),
               
-  testCase "message saved" ("11 someplayer\r\n" `parsesTo` (MessageSaved "someplayer")),
+  testCase "message saved" ("11 someplayer\r\n" `parsesTo` MessageSaved "someplayer"),
               
   testCase "says" 
-    ("12 someplayer Do you want to play a game?\r\n" `parsesTo` (Says "someplayer" "Do you want to play a game?")),
+    ("12 someplayer Do you want to play a game?\r\n" `parsesTo` Says "someplayer" "Do you want to play a game?"),
 
   testCase "shouts"
     ("13 someplayer Anybody for a 5 point match?\r\n" `parsesTo` 
-     (Shouts "someplayer" "Anybody for a 5 point match?")),
+     Shouts "someplayer" "Anybody for a 5 point match?"),
 
   testCase "whispers"
     ("14 someplayer I think he is using loaded dice  :-)\r\n" `parsesTo` 
-     (Whispers "someplayer" "I think he is using loaded dice  :-)")),
+     Whispers "someplayer" "I think he is using loaded dice  :-)"),
 
   testCase "kibitzes"
     ("15 someplayer G'Day and good luck from Hobart, Australia.\r\n" `parsesTo` 
-     (Kibitzes "someplayer" "G'Day and good luck from Hobart, Australia."))
+     Kibitzes "someplayer" "G'Day and good luck from Hobart, Australia.")
   ]
   where 
     motd = 
@@ -139,7 +139,7 @@ individualMessageTypesParsing = testGroup "FIBS message parsing of individual me
     
     str `failsToParseWithErr` err = assertEqual "" (ParseFailure err, []) (parseFIBSMessage str)
 
-    toUTCTime str = (fromJust $ parseTime defaultTimeLocale "%s" str)
+    toUTCTime str = fromJust $ parseTime defaultTimeLocale "%s" str
 
 
 instance Arbitrary Flag where
@@ -156,7 +156,7 @@ commandFormatting = testGroup "FIBS command formatting" [
   testProperty "formatted toggle is 'toggle <flag>'" formatCommandToggleFlag
   ]
   where
-    formatCommandToggleFlag cmd@(Toggle flag) = "toggle " ++ (map toLower $ show flag) == formatCommand cmd
+    formatCommandToggleFlag cmd@(Toggle flag) = "toggle " ++ (map toLower . show) flag == formatCommand cmd
 
 
 -- tests

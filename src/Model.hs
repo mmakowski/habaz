@@ -222,7 +222,7 @@ updatePlayer' p s = do
   let pname = name p
       ps = players s
       pm = Map.insert pname p (playerMap ps) 
-      pd = (Updated pname):(playerDeltas ps)
+      pd = Updated pname:playerDeltas ps
       ps' = Players pm pd
   return $ s `withPlayers` ps'
 
@@ -232,4 +232,4 @@ logErrorIO :: String -> SessionStateTransition
 logErrorIO e st = return $ logError e st
 
 logUnableToErrorIO :: String -> SessionStateTransition
-logUnableToErrorIO act s = logErrorIO ("unable to " ++ act ++ " in " ++ (stateName s) ++ " state") s
+logUnableToErrorIO act s = logErrorIO ("unable to " ++ act ++ " in " ++ stateName s ++ " state") s
