@@ -4,15 +4,18 @@ import Data.Maybe
 import Data.Time
 import System.Locale
 import System.Random
-import Test.Framework (testGroup)
+import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (testCase)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
-import Test.HUnit
+import Test.HUnit hiding (Test)
 import Test.QuickCheck
 
 import FIBSClient.Commands
 import FIBSClient.Messages
 
+instance Arbitrary FIBSMessage where
+  arbitrary = elements [ LoginPrompt ]
+  -- TODO: more
 
 -- TODO: define where it's needed
 instance Arbitrary a => Arbitrary (ParseResult a) where
@@ -21,6 +24,12 @@ instance Arbitrary a => Arbitrary (ParseResult a) where
                  elements [ParseSuccess a, ParseFailure msg]
 
 
+allFIBSClientTests :: [Test]
+allFIBSClientTests = [ parsingTopLevel
+                     , individualMessageTypesParsing
+                     , commandFormatting
+                     ]
+        
 parsingTopLevel = testGroup "FIBS message stream parsing and splitting" [
   testCase "parseFIBSMessages is lazy" (
      [ParseSuccess LoginPrompt, ParseSuccess LoginPrompt] @=? (take 2 . parseFIBSMessages . cycle) "login:"),

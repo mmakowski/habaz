@@ -22,6 +22,7 @@ module View(
   showInfoMessage, showErrorMessages,
   showPlayers,
   promptForUsernameAndPassword,
+  promptYesNo,
   -- * Construction
   createView
 ) where
@@ -106,15 +107,18 @@ promptForUsernameAndPassword v = do
              row 5 [ widget ok, widget cancel]
              ]
         ]
-  showModal d (setStopActions ok cancel usernameInput passwordInput)
+  showModal d (setActions ok cancel usernameInput passwordInput)
   where
-    setStopActions ok cancel usernameInput passwordInput stop = do
+    setActions ok cancel usernameInput passwordInput stop = do
       set ok [ on command := do
                   username <- get usernameInput text
                   password <- get passwordInput text
                   stop (Just (username, password)) ]
       set cancel [ on command := stop Nothing ]
         
+promptYesNo :: String -> ViewUpdate Bool
+promptYesNo prompt v = confirmDialog (sessionWindow v) "Confirm" prompt True
+  
 -- TODO: displaySession :: SessionState -> ViewUpdate
 
 -- * Construction

@@ -75,15 +75,18 @@ loginU sessTV view = do
       disableLogIn view
       sess' <- executeTransition (login defaultFIBSHost defaultFIBSPort username password) sessTV
       case sess' of
-        (Disconnected e) -> do reportErrors sessTV view
-                               enableLogIn view
-        (LoggedIn c m e) -> do startMessageProcessingThread m
+        (Disconnected _) -> do errorMsg <- return "Dupa" -- popError sessTV
+                               create <- promptYesNo (errorMsg ++ " Would you like to create an account with supplied credentials?") view
+                               if create 
+                                 then enableLogIn view -- TODO: createAccountU 
+                                 else enableLogIn view
+        (LoggedIn _ m _) -> do startMessageProcessingThread m
                                (disableLogIn |> enableLogOut) view
     startMessageProcessingThread msgs = do 
       executeTransition startProcessingMessages sessTV
       forkIO $ processMessage msgs `catch` errorHandler
     processMessage (msg:msgs) = do
-      print msg
+      print msg -- debugging only
       updateForMessage msg sessTV view
       if isTerminating msg then disconnectU sessTV view
         else processMessage msgs

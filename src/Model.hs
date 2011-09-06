@@ -13,7 +13,8 @@ Levels from /Match/ down are pure, /Session/ level involves IO actions.
 -}
 module Model(
   -- * States
-  SessionState (..),
+  SessionStateF (..),
+  SessionState,
   Players (..),
   PlayerName (PlayerName), pnstr,
   PlayerInfo (..),
@@ -27,6 +28,8 @@ module Model(
   SessionStateTransition,
   login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, toggleReady,
   updatePlayer,
+  logError,
+  popError,
   logErrorIO
 ) where
 import FIBSClient hiding (login, logout, disconnect, Flag (..), name)
@@ -43,29 +46,29 @@ import System.IO.Error
 class State a where
   stateName :: a -> String
 
-data SessionState
+data SessionStateF c -- ^ connection type; parameterised so that we can use an arbitrary type for testing
      -- | Client is disconnected from the server
      = Disconnected { errors :: [String] } 
      -- | Client is logged out but we still hold a connection which might need to be closed
-     | LoggedOut { connection :: WriteOnlyConnection
+     | LoggedOut { connection :: c
                  , errors :: [String] }
      -- | Client is connected and logged in but the messages from the server are not being processed yet
-     | LoggedIn { connection :: WriteOnlyConnection
+     | LoggedIn { connection :: c
                 , messages :: [ParseResult FIBSMessage]
                 , errors :: [String]
                 }
      -- | The messages are being processed; ready state has not been recognised yet
-     | ProcessingMessages { connection :: WriteOnlyConnection
+     | ProcessingMessages { connection :: c
                           , players :: Players
                           , errors :: [String]
                           }
      -- | The player is refusing games and can't invite
-     | NotReady { connection :: WriteOnlyConnection
+     | NotReady { connection :: c
                 , players :: Players
                 , errors :: [String]
                 }
      -- | The player is ready to play -- can invite and receive invitations
-     | Ready { connection :: WriteOnlyConnection
+     | Ready { connection :: c
              , players :: Players
                -- TODO: invitations
              , errors :: [String]
@@ -73,7 +76,9 @@ data SessionState
      -- TODO: other session states
      deriving (Eq, Show)
 
-instance State SessionState where
+type SessionState = SessionStateF WriteOnlyConnection
+
+instance State (SessionStateF c) where
   stateName s = case s of
     LoggedOut _ _   -> "LoggedOut"
     Disconnected _  -> "Disconnected"
@@ -121,14 +126,29 @@ initialSessionState = Disconnected []
 
 -- state manipulation functions
 
-logError :: String -> SessionState -> SessionState
+logError :: String -> SessionStateF c -> SessionStateF c
 logError e st = case st of
-  LoggedOut c es     -> LoggedOut c (es ++ [e])
-  Disconnected es    -> Disconnected (es ++ [e])
-  LoggedIn c m es    -> LoggedIn c m (es ++ [e])  
-  ProcessingMessages c p es -> ProcessingMessages c p (es ++ [e])    
-  NotReady c p es  -> NotReady c p (es ++ [e])
-  Ready c p es     -> Ready c p (es ++ [e])
+  LoggedOut c es     -> LoggedOut c (e:es)
+  Disconnected es    -> Disconnected (e:es)
+  LoggedIn c m es    -> LoggedIn c m (e:es)  
+  ProcessingMessages c p es -> ProcessingMessages c p (e:es)    
+  NotReady c p es  -> NotReady c p (e:es)
+  Ready c p es     -> Ready c p (e:es)
+
+popError :: SessionStateF c -> (Maybe String, SessionStateF c)
+popError st = case st of
+  LoggedOut c (e:es) -> (Just e, LoggedOut c es)
+  LoggedOut _ []     -> (Nothing, st)
+  Disconnected (e:es) -> (Just e, Disconnected es)
+  Disconnected [] -> (Nothing, st)
+  LoggedIn c m (e:es) -> (Just e, LoggedIn c m es)
+  LoggedIn _ _ [] -> (Nothing, st)
+  ProcessingMessages c p (e:es) -> (Just e, ProcessingMessages c p es)
+  ProcessingMessages _ _ [] -> (Nothing, st)
+  NotReady c p (e:es) -> (Just e, NotReady c p es)
+  NotReady _ _ [] -> (Nothing, st)
+  Ready c p (e:es) -> (Just e, Ready c p es)
+  Ready _ _ [] -> (Nothing, st)
 
 withErrors :: SessionState -> [String] -> SessionState
 (LoggedOut c _) `withErrors` es = LoggedOut c es
