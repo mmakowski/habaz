@@ -9,6 +9,7 @@ import Test.QuickCheck
 import Model
 
 import FIBSClientTests -- arbitrary instance for ParseResults
+
 type DummyConn = ()
 
 instance Arbitrary PlayerName where
@@ -25,9 +26,8 @@ instance Arbitrary PlayerDelta where
 instance Arbitrary PlayerInfo where
   arbitrary = liftM5 PlayerInfo arbitrary arbitrary arbitrary arbitrary arbitrary
                    
-instance (Arbitrary a, Arbitrary b) => Arbitrary (Map a b) where
-  arbitrary = elements [ Map.empty ]
-  -- TODO: non-empty map
+instance (Ord a, Arbitrary a, Arbitrary b) => Arbitrary (Map a b) where
+  arbitrary = oneof [ return Map.empty, liftM Map.fromList $ listOf arbitrary ]
   
 instance Arbitrary Players where
   arbitrary = liftM2 Players arbitrary arbitrary  
