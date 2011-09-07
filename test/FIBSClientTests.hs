@@ -1,4 +1,5 @@
 module FIBSClientTests where
+import Control.Monad (liftM, liftM2, liftM3)
 import Data.Char
 import Data.Maybe
 import Data.Time
@@ -13,9 +14,38 @@ import Test.QuickCheck
 import FIBSClient.Commands
 import FIBSClient.Messages
 
+instance Arbitrary RedoubleLimit where
+  arbitrary = oneof [ return Unlimited, liftM LimitedTo $ choose (0, 20) ]
+
 instance Arbitrary FIBSMessage where
-  arbitrary = elements [ LoginPrompt ]
-  -- TODO: more
+  arbitrary = oneof [ return LoginPrompt 
+                    , liftM FreeForm arbitrary 
+                    , liftM System arbitrary
+                    , return ReadyOn
+                    , return ReadyOff
+                    , return ConnectionTimeOut
+                    , return EndOfGoodbyeMessage
+                    -- TODO: , liftM3 Welcome arbitrary arbitrary arbitrary
+                    -- TODO: OwnInfo
+                    , liftM MOTD arbitrary
+                    -- TODO: WhoInfo
+                    , return EndOfWhoInfoBlock
+                    , liftM2 Login arbitrary arbitrary
+                    , liftM2 Logout arbitrary arbitrary
+                    -- TODO: , liftM3 Message arbitrary arbitrary arbitrary
+                    , liftM MessageDelivered arbitrary
+                    , liftM MessageSaved arbitrary
+                    , liftM2 Says arbitrary arbitrary
+                    , liftM2 Shouts arbitrary arbitrary
+                    , liftM2 Whispers arbitrary arbitrary
+                    , liftM2 Kibitzes arbitrary arbitrary
+                    , liftM2 YouSay arbitrary arbitrary
+                    , liftM YouShout arbitrary
+                    , liftM YouWhisper arbitrary
+                    , liftM YouKibitz arbitrary
+                    ]
+
+-- TODO: separate instance for [FibsMessage], with realistic message sequences 
 
 -- TODO: define where it's needed
 instance Arbitrary a => Arbitrary (ParseResult a) where
