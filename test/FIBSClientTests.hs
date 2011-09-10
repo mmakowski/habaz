@@ -47,11 +47,10 @@ instance Arbitrary FIBSMessage where
 
 -- TODO: separate instance for [FibsMessage], with realistic message sequences 
 
--- TODO: define where it's needed
 instance Arbitrary a => Arbitrary (ParseResult a) where
-  arbitrary = do a <- arbitrary
-                 msg <- arbitrary
-                 elements [ParseSuccess a, ParseFailure msg]
+  arbitrary = oneof [ liftM ParseSuccess arbitrary
+                    , liftM ParseFailure arbitrary
+                    ]
 
 
 allFIBSClientTests :: [Test]

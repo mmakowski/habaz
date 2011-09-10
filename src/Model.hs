@@ -26,14 +26,14 @@ module Model(
   withErrors,
   -- * Transitions
   SessionStateTransition,
-  login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, toggleReady,
+  createAccount, login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, toggleReady,
   updatePlayer,
   logError,
   popError,
   logErrorIO
 ) where
-import FIBSClient hiding (login, logout, disconnect, Flag (..), name)
-import qualified FIBSClient (login, logout, disconnect, Flag (..), name)
+import FIBSClient hiding (login, logout, createAccount, disconnect, Flag (..), name)
+import qualified FIBSClient (login, logout, createAccount, disconnect, Flag (..), name)
 -- player map
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -170,6 +170,19 @@ withPlayers :: SessionState -> Players -> SessionState
 -- might involve IO actions hence the result type is tainted with IO.
 type SessionStateTransition = SessionState -> IO SessionState
 
+-- | Tries to create an account. Has to be executed in a Disconnected state
+-- TODO: provide a convenient way to deremine if the creation was succesful.
+createAccount :: String                 -- ^ host
+              -> String                 -- ^ port
+              -> String                 -- ^ user name
+              -> String                 -- ^ password
+              -> SessionStateTransition -- ^ the state transition
+createAccount host port userName password s@(Disconnected _) = do
+  status <- FIBSClient.createAccount defaultFIBSHost defaultFIBSPort userName password
+  case status of
+    AccountCreationSuccess -> return s
+    AccountCreationFailure msg -> return $ logError msg s
+  
 -- | Tries to connect and log in to FIBS.
 login :: String                  -- ^ host
       -> String                  -- ^ port

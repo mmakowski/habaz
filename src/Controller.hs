@@ -5,6 +5,7 @@ module Controller(
 ) where
 import Model
 import View
+-- TODO: include createAccount as a state transition
 import FIBSClient (defaultFIBSHost, defaultFIBSPort)
 -- for mapping messages to updates
 import FIBSClient.Messages hiding (name, opponent, watching, ready, rating, experience)
@@ -75,13 +76,21 @@ loginU sessTV view = do
       disableLogIn view
       sess' <- executeTransition (login defaultFIBSHost defaultFIBSPort username password) sessTV
       case sess' of
-        (Disconnected _) -> do errorMsg <- return "Dupa" -- popError sessTV
-                               create <- promptYesNo (errorMsg ++ " Would you like to create an account with supplied credentials?") view
-                               if create 
-                                 then enableLogIn view -- TODO: createAccountU 
-                                 else enableLogIn view
+        (Disconnected _) -> promptToCreateAccount username password
         (LoggedIn _ m _) -> do startMessageProcessingThread m
                                (disableLogIn |> enableLogOut) view
+    promptToCreateAccount username password = do 
+      errorMsg <- popErrorTV sessTV
+      let prefix = case errorMsg of
+                     Just msg -> "Login failed: " ++ msg ++ ". "
+                     Nothing -> "Login failed for unknown reason. "
+      create <- promptYesNo (prefix ++ " Would you like to create an account with supplied credentials?") view
+      if create 
+        then do
+          executeTransition (createAccount defaultFIBSHost defaultFIBSPort username password) sessTV
+          -- TODO: display error if account creation failed
+          doLogin username password
+        else enableLogIn view
     startMessageProcessingThread msgs = do 
       executeTransition startProcessingMessages sessTV
       forkIO $ processMessage msgs `catch` errorHandler
@@ -161,3 +170,12 @@ bindViewActions sessionTV view = do
   where
     run cmd = do forkIO $ cmd sessionTV view; return ()
       
+-- * Helper functions
+
+popErrorTV :: TMVar SessionState -> IO (Maybe String)
+popErrorTV sessTV = do
+  sess <- atomically $ takeTMVar sessTV
+  let (err, sess') = popError sess
+  atomically $ putTMVar sessTV sess'
+  return err
+  

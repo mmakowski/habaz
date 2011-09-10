@@ -49,9 +49,8 @@ allModelTests :: [Test]
 allModelTests = [ stateManipulation ]
 
 stateManipulation = testGroup "Session state manipulation" [
-  testProperty "popError pops what logError logged" pt 
+  testProperty "popError pops what logError logged" ppwll 
   ]
   where
-    pt :: SessionStateF DummyConn -> Bool
-    pt st = popError (logError "latest error" st) == (Just "latest error", st)
-  
+    ppwll :: SessionStateF DummyConn -> Bool
+    ppwll st = popError (logError "latest error" st) == (Just "latest error", st)
