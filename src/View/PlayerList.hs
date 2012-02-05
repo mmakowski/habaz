@@ -4,9 +4,13 @@ module View.PlayerList (
 ) where
 -- WX
 import Graphics.UI.WX 
-import Graphics.UI.WXCore (listCtrlDeleteItem, listCtrlGetItemCount, listCtrlGetItemText, listCtrlInsertItemWithData)
+import Graphics.UI.WXCore (listCtrlDeleteItem, listCtrlGetItemCount, listCtrlGetItemText, listCtrlInsertItemWithData, listCtrlSetItem)
+-- Player map
+import qualified Data.Map as Map
 -- Model
 import Model
+-- misc
+import Data.Maybe (fromMaybe)
 
 createPlayerList :: Frame () -> IO (ListCtrl ())
 createPlayerList f = listCtrl f [ columns := [ ("Name", AlignLeft, 120)
@@ -53,6 +57,9 @@ type ItemAction = ListCtrl () -> PlayerMap -> Int -> PlayerName -> IO Int
 insertItem :: ItemAction
 insertItem listCtrl playerMap pos pName = do
   listCtrlInsertItemWithData listCtrl pos (pnstr pName)
+  let p = Map.lookup pName playerMap
+  let r = fromMaybe "" $ fmap (show . rating) p
+  listCtrlSetItem listCtrl pos 1 r 0
   return $ pos + 1
 
 updateItem :: ItemAction
