@@ -5,7 +5,6 @@ module Controller(
 ) where
 import Model
 import View
--- TODO: include createAccount as a state transition
 import FIBSClient (defaultFIBSHost, defaultFIBSPort)
 -- for mapping messages to updates
 import FIBSClient.Messages hiding (name, opponent, watching, ready, rating, experience)
