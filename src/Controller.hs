@@ -115,9 +115,10 @@ updateForMessage (ParseFailure err) =
   \sessTV view -> do executeTransition (logErrorIO err) sessTV
                      reportErrors sessTV view
 updateForMessage (ParseSuccess msg) = case msg of
+  Logout _ _ -> removePlayerU msg
+  OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> recogniseReadyU $ Msg.ready msg
   ReadyOn -> recogniseReadyU True
   ReadyOff -> recogniseReadyU False
-  OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> recogniseReadyU $ Msg.ready msg
   WhoInfo _ _ _ _ _ _ _ _ _ _ _ _ -> updatePlayerU msg
   _ -> noOpU
   
@@ -125,6 +126,11 @@ recogniseReadyU :: Bool -> ModelAndViewUpdate
 recogniseReadyU ready sessTV view = do
   executeTransition (if ready then recogniseReady else recogniseNotReady) sessTV
   (enableReady |> setCheckedReady ready) view
+
+removePlayerU :: FIBSMessage -> ModelAndViewUpdate
+removePlayerU (Logout pName msg) sessTV view = do
+  sess <- executeTransition (removePlayer (PlayerName pName)) sessTV
+  showPlayers sess view
 
 updatePlayerU :: FIBSMessage -> ModelAndViewUpdate
 updatePlayerU wi sessTV view = do 

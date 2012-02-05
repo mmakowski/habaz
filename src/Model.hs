@@ -16,10 +16,11 @@ module Model(
   SessionStateF (..),
   SessionState,
   Players (..),
+  PlayerMap,
   PlayerName (PlayerName), pnstr,
   PlayerInfo (..),
   PlayerGameState (..),
-  PlayerDelta (..),
+  PlayerDelta (..), pdstr,
   -- ** Constants
   initialSessionState,
   -- * Direct manipulation
@@ -27,7 +28,7 @@ module Model(
   -- * Transitions
   SessionStateTransition,
   createAccount, login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, toggleReady,
-  updatePlayer,
+  updatePlayer, removePlayer,
   logError,
   popError,
   logErrorIO
@@ -87,8 +88,10 @@ instance State (SessionStateF c) where
     NotReady _ _ _ -> "NotReady"
     Ready _ _ _    -> "Ready"
     
-data Players = Players { playerMap :: Map PlayerName PlayerInfo
-                       , playerDeltas :: [PlayerDelta]
+type PlayerMap = Map PlayerName PlayerInfo
+
+data Players = Players { playerMap :: PlayerMap
+                       , playerDeltas :: [PlayerDelta] -- TODO: should be enough to have one -- each delta is handled immediately
                        }
                deriving (Eq, Show)
 
@@ -117,7 +120,16 @@ data PlayerDelta = Added PlayerName
                  | Removed PlayerName
                  | Updated PlayerName
                  deriving (Eq, Show)
-                          
+ 
+pdstr :: PlayerDelta -> String
+pdstr (Added pn) = pnstr pn
+pdstr (Removed pn) = pnstr pn
+pdstr (Updated pn) = pnstr pn
+                         
+instance Ord PlayerDelta where
+  compare d1 d2 = compare (pdstr d1) (pdstr d2)
+  
+ 
 
 -- ** Constants
 
@@ -247,19 +259,32 @@ toggleReady' s = do
 
 -- | Updates player info
 updatePlayer :: PlayerInfo -> SessionStateTransition
-updatePlayer p s@(ProcessingMessages _ _ _) = updatePlayer' p s 
-updatePlayer p s@(Ready _ _ _) = updatePlayer' p s
-updatePlayer p s@(NotReady _ _ _) = updatePlayer' p s
-updatePlayer _ s = logUnableToErrorIO "update player info" s
-updatePlayer' p s = do
+updatePlayer p = do
   let pname = name p
-      ps = players s
-      pm = Map.insert pname p (playerMap ps) 
-      pd = Updated pname:playerDeltas ps
+      mapOp = Map.insert pname p 
+      delta = Updated pname
+  playerChange mapOp delta "update player info"
+
+-- | Removes player
+removePlayer :: PlayerName -> SessionStateTransition
+removePlayer pname = do
+  let mapOp = Map.delete pname
+      delta = Removed pname
+  playerChange mapOp delta "remove player"
+  
+-- helper functions
+
+playerChange :: (PlayerMap -> PlayerMap) -> PlayerDelta -> String -> SessionStateTransition
+playerChange mapOp delta _ s@(ProcessingMessages _ _ _) = playerChange' mapOp delta s 
+playerChange mapOp delta _ s@(Ready _ _ _) = playerChange' mapOp delta s
+playerChange mapOp delta _ s@(NotReady _ _ _) = playerChange' mapOp delta s
+playerChange _ _ desc s = logUnableToErrorIO desc s
+playerChange' mapOp delta s = do
+  let ps = players s
+      pm = mapOp $ playerMap ps
+      pd = [delta]
       ps' = Players pm pd
   return $ s `withPlayers` ps'
-
--- helper functions
 
 logErrorIO :: String -> SessionStateTransition
 logErrorIO e st = return $ logError e st

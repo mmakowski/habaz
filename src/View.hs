@@ -7,7 +7,7 @@ invitations.
 TODO: display invitation status
 
 -}
-module View(
+module View (
   -- * Representation  
   View (..), SessionMenu (..),
   -- ** Wrappers for UI toolkit
@@ -29,15 +29,20 @@ module View(
 -- WX
 import Graphics.UI.WX hiding (Menu, menu, menuBar)
 import qualified Graphics.UI.WX as WX (Menu, menuBar)
+import Graphics.UI.WXCore (listCtrlGetItemCount, listCtrlGetItemText, listCtrlInsertItemWithData)
 -- Model
 import Model
 import Backgammon -- TODO: re-export from Model
+import Data.List (sort)
+-- other view modules
+import View.PlayerList (createPlayerList, applyPlayerDeltas)
 -- player map
 import Data.Map (Map)
 import qualified Data.Map as Map
 -- Misc functions
 import Data.List (intercalate)
 
+ 
 -- * Representation
 
 -- | All view elements that need to be acessed by Controller.
@@ -88,11 +93,8 @@ showErrorMessages :: [String] -> ViewUpdate ()
 showErrorMessages [] _ = return ()
 showErrorMessages msgs v = errorDialog (sessionWindow v) "Error" (intercalate "\n\n" msgs)
 
--- TODO: flickers! Try using Graphics.UI.WXCore
 showPlayers :: SessionState -> ViewUpdate ()
-showPlayers ss v = set (playerList v) [ items := map (\p -> [pnstr $ name p, show $ rating p]) 
-                                                     (Map.elems $ playerMap $ players ss) 
-                                      ]
+showPlayers ss v = applyPlayerDeltas (playerList v) (playerMap $ players ss) 0 (sort $ playerDeltas $ players ss) 
 
 promptForUsernameAndPassword :: ViewUpdate (Maybe (String, String))
 promptForUsernameAndPassword v = do 
@@ -132,10 +134,7 @@ createView :: IO View
 createView = do
   f <- frame [ text := "Habaź" ]
   (menuBar, menuRepr) <- createMenuBar
-  playerList <- listCtrl f [ columns := [ ("Name", AlignLeft, 120)
-                                        , ("Rating", AlignLeft, 50)
-                                        ]
-                           ]
+  playerList <- createPlayerList f
   set f [ WX.menuBar := menuBar
         , layout := minsize (sz startWidth startHeight) $
           column 5 [ fill $ widget playerList ]
@@ -143,7 +142,6 @@ createView = do
   timer f [ interval := 1, on command := return () ]
   return $ View f menuRepr playerList
   
-
 createMenuBar :: IO ([WX.Menu ()], SessionMenu)
 createMenuBar = do
   session <- menuPane        [ text := "&Session"]
