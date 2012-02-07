@@ -11,43 +11,70 @@ list of erros, the connection (when connected), list of players (when connected)
 
 Levels from /Match/ down are pure, /Session/ level involves IO actions.
 -}
-module Model(
-  -- * States
-  SessionStateF (..),
-  SessionState,
-  Players (..),
-  PlayerMap,
-  PlayerName (PlayerName), pnstr,
-  PlayerInfo (..),
-  PlayerGameState (..),
-  PlayerDelta (..), pdstr,
-  -- ** Constants
-  initialSessionState,
-  -- * Direct manipulation
-  withErrors,
-  -- * Transitions
-  SessionStateTransition,
-  createAccount, login, logout, disconnect, startProcessingMessages, recogniseNotReady, recogniseReady, toggleReady,
-  updatePlayer, removePlayer,
-  logError,
-  popError,
-  logErrorIO
-) where
-import FIBSClient hiding (login, logout, createAccount, disconnect, Flag (..), name)
-import qualified FIBSClient (login, logout, createAccount, disconnect, Flag (..), name)
--- player map
-import Data.Map (Map)
-import qualified Data.Map as Map
--- exception handling
-import System.IO
-import System.IO.Error
+module Model ( Session
+             , (<|)
+             , initialSession
+             , disconnectedSession
+             , loggedInSession
+             , readySession
+             ) 
+where
+import Events hiding (Disconnected)
+import qualified Events as E (Event (Disconnected))
 
--- * States
+-- | Session consists of current state's data and a transition function that gives us the new state
+data Session = Session SessionData (Event -> Session)
+instance Show Session where show (Session sd _) = show sd
+instance Eq Session where (Session sd1 _) == (Session sd2 _) = sd1 == sd2
 
-class State a where
-  stateName :: a -> String
+(<|) :: Session -> Event -> Session
+(Session _ t) <| e = t e
 
-data SessionStateF c -- ^ connection type; parameterised so that we can use an arbitrary type for testing
+-- | initial session state
+initialSession :: Session
+initialSession = disconnectedSession
+
+-- | disconnected from server
+disconnectedSession :: Session
+disconnectedSession = Session Disconnected disconnectedTransition
+
+disconnectedTransition :: Event -> Session
+disconnectedTransition e = case e of
+  LoginSuccesful name -> loggedInSession name
+  _                   -> disconnectedSession
+
+-- | user is logged in but is not ready to play
+loggedInSession :: String -> Session
+loggedInSession name = Session (LoggedIn name) (loggedInTransition name)
+
+loggedInTransition :: String -> Event -> Session
+loggedInTransition name e = disconnectionHandler e $ case e of
+  ReadyOn        -> readySession name
+  E.Disconnected -> disconnectedSession
+  _              -> loggedInSession name
+
+-- | user is ready to play
+readySession :: String -> Session
+readySession name = Session (Ready name) (readyTransition name)
+
+readyTransition :: String -> Event -> Session
+readyTransition name e = disconnectionHandler e $ error "TODO: readyTransition"
+
+disconnectionHandler :: Event -> Session -> Session
+disconnectionHandler e s = case e of
+  E.Disconnected -> disconnectedSession
+  _              -> s
+
+
+data SessionData
+     = Disconnected
+     | LoggedIn String
+     | Ready String
+  deriving (Eq, Show)
+
+{-
+
+data StateDataF
      -- | Client is disconnected from the server
      = Disconnected { errors :: [String] } 
      -- | Client is logged out but we still hold a connection which might need to be closed
@@ -77,7 +104,7 @@ data SessionStateF c -- ^ connection type; parameterised so that we can use an a
      -- TODO: other session states
      deriving (Eq, Show)
 
-type SessionState = SessionStateF WriteOnlyConnection
+type StateData = StateDataF WriteOnlyConnection
 
 instance State (SessionStateF c) where
   stateName s = case s of
@@ -291,3 +318,4 @@ logErrorIO e st = return $ logError e st
 
 logUnableToErrorIO :: String -> SessionStateTransition
 logUnableToErrorIO act s = logErrorIO ("unable to " ++ act ++ " in " ++ stateName s ++ " state") s
+-}

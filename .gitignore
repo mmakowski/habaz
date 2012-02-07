@@ -4,3 +4,6 @@ dist/
 *~
 
 /.dist-scion
+/.dist-buildwrapper
+*.sublime-project
+*.sublime-workspace

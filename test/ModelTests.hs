@@ -1,13 +1,40 @@
 module ModelTests where
-import Control.Monad (liftM, liftM2, liftM5)
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Control.Monad (liftM)
 import Test.Framework (Test, testGroup)
+import Test.Framework.Providers.HUnit (testCase)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
+import Test.HUnit hiding (Test)
 import Test.QuickCheck
 
 import Model
+import Events
 
+instance Arbitrary Session where
+  arbitrary = oneof [ return disconnectedSession
+                    , liftM loggedInSession arbitrary
+                    , liftM readySession arbitrary
+                    -- TODO: other states
+                    ]
+
+allModelTests :: [Test]
+allModelTests = [ sessionStateTransitions ]
+
+sessionStateTransitions = testGroup "Session state manipulation" [
+  testCase "disconnected --LoginSuccesful-> loggedIn" (
+    loggedInSession name @=? disconnectedSession <| (LoginSuccesful name)),
+
+  testCase "loggedIn --ReadyOn-> ready" (
+     readySession name @=? (loggedInSession name) <| ReadyOn),
+
+  testProperty "* --Disconnected-> disconnected" (
+    \s -> s <| Disconnected == disconnectedSession)
+  ]
+
+
+name :: String
+name = "some name"
+
+{-
 import FIBSClientTests -- arbitrary instance for ParseResults
 
 type DummyConn = ()
@@ -54,3 +81,4 @@ stateManipulation = testGroup "Session state manipulation" [
   where
     ppwll :: SessionStateF DummyConn -> Bool
     ppwll st = popError (logError "latest error" st) == (Just "latest error", st)
+-}

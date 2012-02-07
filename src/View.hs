@@ -8,25 +8,10 @@ TODO: display invitation status
 
 -}
 module View (
-  -- * Representation  
-  View (..), SessionMenu (..),
-  -- ** Wrappers for UI toolkit
-  setCommandHandler,
-  -- * Actions
-  ViewUpdate,
-  (|>),
-  disableLogIn, enableLogIn,
-  disableLogOut, enableLogOut,
-  disableReady, enableReady, setCheckedReady,
-  disableInvite, enableInvite,
-  closeMainWindow,
-  showInfoMessage, showErrorMessages,
-  showPlayers,
-  promptForUsernameAndPassword,
-  promptYesNo,
-  -- * Construction
+  View,
   createView
 ) where
+{-
 -- WX
 import Graphics.UI.WX hiding (Menu, menu, menuBar)
 import qualified Graphics.UI.WX as WX (Menu, menuBar)
@@ -42,8 +27,12 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 -- Misc functions
 import Data.List (intercalate)
+-}
 
- 
+type View = ()
+createView = error "TODO: createView"
+
+{- 
 -- * Representation
 
 -- | All view elements that need to be acessed by Controller.
@@ -221,3 +210,4 @@ drawPieces n dc origin orientation width height colour = drawPieces' n n
              centre = pointAdd origin (Point radius (((n - 1) * 2 + 1) * radius * orientation))
          circle dc centre radius [brushColor := colour]
          drawPieces' (n - 1) total
+-}

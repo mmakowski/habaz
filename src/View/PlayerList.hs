@@ -1,3 +1,5 @@
+module View.PlayerList where
+{-
 module View.PlayerList (
   createPlayerList,
   applyPlayerDeltas
@@ -64,3 +66,4 @@ insertItem listCtrl playerMap pos pName = do
 
 updateItem :: ItemAction
 updateItem _ _ pos _ = return $ pos + 1 -- TODO
+-}
