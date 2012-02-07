@@ -18,6 +18,7 @@ module View (
   disableLogIn, enableLogIn,
   disableLogOut, enableLogOut,
   disableReady, enableReady, setCheckedReady,
+  disableInvite, enableInvite,
   closeMainWindow,
   showInfoMessage, showErrorMessages,
   showPlayers,
@@ -56,6 +57,8 @@ data SessionMenu = Menu { logInItem :: MenuItem ()
                         , logOutItem :: MenuItem ()
                         , readyItem :: MenuItem ()
                         , exitItem :: MenuItem ()
+                        , matchPane :: WX.Menu ()
+                        , inviteItem :: MenuItem ()
                         }
 
 -- ** Wrappers for UI toolkit
@@ -79,6 +82,9 @@ enableLogOut = setMenuEnabled logOutItem True
 disableReady = setMenuEnabled readyItem False
 enableReady = setMenuEnabled readyItem True
 setCheckedReady = setMenuChecked readyItem
+-- TODO: these should be enabled/disabled depending on whether a player is selected in player list 
+enableInvite = setMenuEnabled inviteItem True
+disableInvite = setMenuEnabled inviteItem False
   
 setMenuEnabled = setMenuBoolProp enabled
 setMenuChecked = setMenuBoolProp checked
@@ -144,7 +150,7 @@ createView = do
   
 createMenuBar :: IO ([WX.Menu ()], SessionMenu)
 createMenuBar = do
-  session <- menuPane        [ text := "&Session"]
+  session <- menuPane        [ text := "&Session" ]
   logIn <- menuItem session  [ text := "Log &In..." ]
   logOut <- menuItem session [ text := "Log &Out"
                              , enabled := False
@@ -155,8 +161,12 @@ createMenuBar = do
                              ]
   menuLine session
   exit <- menuItem session   [ text := "E&xit\tAlt+F4" ]
-  return ([session],
-          Menu logIn logOut ready exit)
+  match <- menuPane          [ text := "&Match" ]
+  invite <- menuItem match   [ text := "&Invite"
+                             , enabled := False 
+                             ]
+  return ([session, match],
+          Menu logIn logOut ready exit match invite)
 
 -- ** Board drawing
 

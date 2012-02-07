@@ -101,8 +101,6 @@ newtype PlayerName = PlayerName String
 pnstr :: PlayerName -> String
 pnstr (PlayerName s) = s
 
--- | Player delta helps the view in figuring out what needs to be changed in the list of
--- players that it displays.
 data PlayerInfo = PlayerInfo { name :: PlayerName
                              , ready :: Bool
                              , playerGameState :: PlayerGameState
@@ -116,6 +114,8 @@ data PlayerGameState = None
                      | Watching String
                      deriving (Eq, Show)
                    
+-- | Player delta helps the view in figuring out what needs to be changed in the list of
+-- players that it displays.
 data PlayerDelta = Added PlayerName
                  | Removed PlayerName
                  | Updated PlayerName
