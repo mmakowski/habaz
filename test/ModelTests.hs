@@ -1,4 +1,6 @@
-module ModelTests where
+{-# LANGUAGE TypeSynonymInstances #-}
+
+module ModelTests where 
 import Control.Monad (liftM)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (testCase)

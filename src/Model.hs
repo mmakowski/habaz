@@ -22,13 +22,20 @@ where
 import Events hiding (Disconnected)
 import qualified Events as E (Event (Disconnected))
 
--- | Session consists of current state's data and a transition function that gives us the new state
-data Session = Session SessionData (Event -> Session)
-instance Show Session where show (Session sd _) = show sd
-instance Eq Session where (Session sd1 _) == (Session sd2 _) = sd1 == sd2
+-- | State of a state machine; a is the type of state data and b is the type of event
+-- that triggers state transition. A state is a pair of data and a transition function.
+data State a b = State a (b -> State a b)
+instance Show a => Show (State a b) where show (State d _) = show d
+instance Eq a => Eq (State a b) where (State d1 _) == (State d2 _) = d1 == d2
 
-(<|) :: Session -> Event -> Session
-(Session _ t) <| e = t e
+-- | perform a state transition
+(<|) :: State a b -- ^ initial state
+     -> b         -- ^ the event that triggers transition
+     -> State a b -- ^ the state after transition
+(State _ t) <| e = t e
+
+-- | Session is a state of a state machine whose transitions are triggered by Events
+type Session = State SessionData Event
 
 -- | initial session state
 initialSession :: Session
@@ -36,7 +43,7 @@ initialSession = disconnectedSession
 
 -- | disconnected from server
 disconnectedSession :: Session
-disconnectedSession = Session Disconnected disconnectedTransition
+disconnectedSession = State Disconnected disconnectedTransition
 
 disconnectedTransition :: Event -> Session
 disconnectedTransition e = case e of
@@ -45,17 +52,16 @@ disconnectedTransition e = case e of
 
 -- | user is logged in but is not ready to play
 loggedInSession :: String -> Session
-loggedInSession name = Session (LoggedIn name) (loggedInTransition name)
+loggedInSession name = State (LoggedIn name) (loggedInTransition name)
 
 loggedInTransition :: String -> Event -> Session
 loggedInTransition name e = disconnectionHandler e $ case e of
   ReadyOn        -> readySession name
-  E.Disconnected -> disconnectedSession
   _              -> loggedInSession name
 
 -- | user is ready to play
 readySession :: String -> Session
-readySession name = Session (Ready name) (readyTransition name)
+readySession name = State (Ready name) (readyTransition name)
 
 readyTransition :: String -> Event -> Session
 readyTransition name e = disconnectionHandler e $ error "TODO: readyTransition"
@@ -70,6 +76,7 @@ data SessionData
      = Disconnected
      | LoggedIn String
      | Ready String
+     -- TODO: more states
   deriving (Eq, Show)
 
 {-
