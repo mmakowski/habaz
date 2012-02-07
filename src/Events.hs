@@ -10,7 +10,8 @@ where
 import Control.Concurrent.STM (atomically) 
 import Control.Concurrent.STM.TChan (TChan, newTChan)
 
-data Event = LoginRequest String String
+data Event = RegistrationRequest String String
+           | LoginRequest String String
            | LoginFailed
            | LoginSuccesful String
            | ReadyOnRequest
