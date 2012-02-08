@@ -1,8 +1,11 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-|
 
 -}
 module Events ( Event (..)
               , EventQueue
+              , EventConsumer
+              , (<|)
               , newEventQueue
               , getEvent
               , putEvent
@@ -12,17 +15,23 @@ where
 import Control.Concurrent.STM (atomically) 
 import Control.Concurrent.STM.TChan (TChan, newTChan, writeTChan, readTChan)
 
-data Event = RegistrationRequest String String
+data Event = Disconnected
+           | Error String
            | LoginRequest String String
            | LoginFailed String
            | LoginSuccesful String
-           | ReadyOnRequest
-           | ReadyOffRequest
+           | ToggleReadyRequest
+           | PlayerUpdated String Float Int
+           | PlayerRemoved String
            | ReadyOn
            | ReadyOff
-           | Disconnected
-           | Error String
+           | RegistrationRequest String String
   deriving (Eq, Show)
+
+class EventConsumer a b where
+  (<|) :: a     -- ^ initial state of consumer
+       -> Event -- ^ the event that triggers transition
+       -> b     -- ^ final state of consumer
 
 type EventQueue = TChan Event
 

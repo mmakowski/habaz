@@ -1,5 +1,6 @@
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 module FIBSConnector ( FIBSConnector
-                     , (</)
+                     , (<|)
                      , fibsConnector
                      ) 
 where
@@ -10,14 +11,14 @@ import Control.Concurrent (forkIO)
 import Control.Monad (forM_)
 
 import FIBSClient
-import Events (putEvent, Event, EventQueue)
+import Events (putEvent, Event, EventQueue, EventConsumer, (<|))
 import qualified Events as E (Event (..))
 
 data FIBSConnector = FIBSConnector (Event -> IO FIBSConnector)
 
 -- | performs connector transition under supplied event
-(</) :: FIBSConnector -> Event -> IO FIBSConnector
-(FIBSConnector f) </ e = f e
+instance EventConsumer FIBSConnector (IO FIBSConnector) where
+  (FIBSConnector f) <| e = f e
 
 -- | a connector that handles login and register events
 fibsConnector :: EventQueue -> FIBSConnector
@@ -55,25 +56,35 @@ commandSendingTransition q conn e = do
   forM_ (commandsFor e) $ sendCommand conn
   return $ commandSender q conn
 
-commandsFor :: Event -> [FIBSCommand]
-commandsFor E.ReadyOn  = [Toggle Ready]
-commandsFor E.ReadyOff = [Toggle Ready]
-commandsFor _          = []
+registrationConnector :: EventQueue -> String -> String -> IO FIBSConnector
+registrationConnector q user pass = error "TODO"
 
 messageProcessor :: EventQueue -> [ParseResult FIBSMessage] -> IO ()
 messageProcessor q (msg:msgs) = do
-  -- TODO: translate msg and put on q
-  print msg
+  print msg -- TODO: proper logging of messages
   forM_ (eventsFor msg) $ putEvent q
   messageProcessor q msgs
+
+-- translation between FIBS messages/commands and events
+
+commandsFor :: Event -> [FIBSCommand]
+commandsFor E.ToggleReadyRequest = [Toggle Ready]
+commandsFor _                    = []
 
 eventsFor :: ParseResult FIBSMessage -> [Event]
 eventsFor (ParseSuccess msg) = eventsFor' msg
 eventsFor (ParseFailure msg) = [E.Error msg]
 
 eventsFor' :: FIBSMessage -> [Event]
-eventsFor' (Welcome name _ _) = [E.LoginSuccesful name]
+eventsFor' (Logout name _)    = [ E.PlayerRemoved name ]
+eventsFor' (OwnInfo name _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ready _ _ _ _) = 
+                                [ E.LoginSuccesful name
+                                , if ready then E.ReadyOn else E.ReadyOff
+                                ]
+eventsFor' ReadyOn            = [ E.ReadyOn ]
+eventsFor' ReadyOff           = [ E.ReadyOff ]
+eventsFor' (Welcome name _ _) = [ E.LoginSuccesful name ]
+eventsFor' (WhoInfo name _ _ ready _ rating exp _ _ _ _ _) =
+                                [ E.PlayerUpdated name rating exp ]
 eventsFor' _                  = []
 
-registrationConnector :: EventQueue -> String -> String -> IO FIBSConnector
-registrationConnector q user pass = error "TODO"

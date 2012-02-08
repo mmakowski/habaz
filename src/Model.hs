@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
+
 {-|
 This module contains data types and functions modeling the state of FIBS session. There are the following
 levels of state:
@@ -28,11 +30,8 @@ data State a b = State a (b -> State a b)
 instance Show a => Show (State a b) where show (State d _) = show d
 instance Eq a => Eq (State a b) where (State d1 _) == (State d2 _) = d1 == d2
 
--- | perform a state transition
-(<|) :: State a b -- ^ initial state
-     -> b         -- ^ the event that triggers transition
-     -> State a b -- ^ the state after transition
-(State _ t) <| e = t e
+instance EventConsumer (State a Event) (State a Event) where
+  (State _ t) <| e = t e
 
 -- | Session is a state of a state machine whose transitions are triggered by Events
 type Session = State SessionData Event

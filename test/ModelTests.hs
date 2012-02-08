@@ -29,7 +29,7 @@ sessionStateTransitions = testGroup "Session state manipulation" [
      readySession name @=? (loggedInSession name) <| ReadyOn),
 
   testProperty "* --Disconnected-> disconnected" (
-    \s -> s <| Disconnected == disconnectedSession)
+    \s -> (s :: Session) <| Disconnected == disconnectedSession)
   ]
 
 

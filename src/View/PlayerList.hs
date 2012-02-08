@@ -1,5 +1,6 @@
 module View.PlayerList ( createPlayerList
-                       -- , applyPlayerDeltas
+                       , removePlayer
+                       , updatePlayer
                        ) 
 where
 -- WX
@@ -16,18 +17,33 @@ import Data.Maybe (fromMaybe)
 createPlayerList :: Frame () -> IO (ListCtrl ())
 createPlayerList f = listCtrl f [ columns := [ ("Name", AlignLeft, 120)
                                              , ("Rating", AlignLeft, 50)
+                                             , ("Experience", AlignLeft, 50)
                                              ]
                                 ]
 
-{-
-applyPlayerDeltas :: ListCtrl () -> PlayerMap -> Int -> [PlayerDelta] -> IO ()
-applyPlayerDeltas _ _ _ [] = return ()
-applyPlayerDeltas listCtrl playerMap pos (pd:pds) = do
-  validPos <- isValidPos listCtrl pos (pdstr pd)
-  if not $ validPos then applyPlayerDeltas listCtrl playerMap (pos + 1) (pd:pds)
-    else do
-      newPos <- applyPlayerDelta listCtrl playerMap pos pd
-      applyPlayerDeltas listCtrl playerMap newPos pds
+removePlayer :: ListCtrl () -> String -> IO ()
+removePlayer listCtrl name = do
+  pos <- findPlayerPos listCtrl name
+  itemCount <- listCtrlGetItemCount listCtrl
+  currentName <- listCtrlGetItemText listCtrl pos
+  if pos < itemCount && currentName == name then listCtrlDeleteItem listCtrl pos else return False
+  return ()
+
+updatePlayer :: ListCtrl () -> String -> Float -> Int -> IO ()
+updatePlayer listCtrl name rating exp = do
+  pos <- findPlayerPos listCtrl name
+  itemCount <- listCtrlGetItemCount listCtrl
+  currentName <- listCtrlGetItemText listCtrl pos
+  let action = if itemCount <= pos || currentName /= name then insertItem else updateItem 
+  action listCtrl pos name rating exp
+  
+findPlayerPos :: ListCtrl () -> String -> IO Int
+findPlayerPos = findPlayerPos' 0
+
+findPlayerPos' :: Int -> ListCtrl () -> String -> IO Int
+findPlayerPos' pos listCtrl name = do
+  validPos <- isValidPos listCtrl pos name
+  if not validPos then findPlayerPos' (pos + 1) listCtrl name else return pos
 
 isValidPos :: ListCtrl () -> Int -> String -> IO Bool
 isValidPos listCtrl pos pName = do
@@ -40,29 +56,17 @@ isValidPos listCtrl pos pName = do
   let prevIsSmaller = pos == 0 || prevText < pName
   return $ isAtEnd || currentItemMatches || currentIsLarger && prevIsSmaller
 
-applyPlayerDelta :: ListCtrl () -> PlayerMap -> Int -> PlayerDelta -> IO Int
-applyPlayerDelta listCtrl playerMap pos (Updated pName) = do
-  itemCount <- listCtrlGetItemCount listCtrl
-  currentName <- listCtrlGetItemText listCtrl pos
-  let action = if itemCount <= pos || currentName /= (pnstr pName) then insertItem else updateItem 
-  action listCtrl playerMap pos pName
-applyPlayerDelta listCtrl playerMap pos (Removed pName) = do
-  itemCount <- listCtrlGetItemCount listCtrl
-  currentName <- listCtrlGetItemText listCtrl pos
-  if pos < itemCount && currentName == (pnstr pName) then listCtrlDeleteItem listCtrl pos else return False
-  return pos  
--- TODO: added
-  
-type ItemAction = ListCtrl () -> PlayerMap -> Int -> PlayerName -> IO Int 
+type ItemAction = ListCtrl () -> Int -> String -> Float -> Int -> IO ()
 
 insertItem :: ItemAction
-insertItem listCtrl playerMap pos pName = do
-  listCtrlInsertItemWithData listCtrl pos (pnstr pName)
-  let p = Map.lookup pName playerMap
-  let r = fromMaybe "" $ fmap (show . rating) p
-  listCtrlSetItem listCtrl pos 1 r 0
-  return $ pos + 1
+insertItem listCtrl pos pName rating exp = do
+  listCtrlInsertItemWithData listCtrl pos pName
+  listCtrlSetItem listCtrl pos 1 (show rating) 0
+  listCtrlSetItem listCtrl pos 2 (show exp) 0
+  return ()
 
 updateItem :: ItemAction
-updateItem _ _ pos _ = return $ pos + 1 -- TODO
--}
+updateItem listCtrl pos pName rating exp = do
+  listCtrlSetItem listCtrl pos 1 (show rating) 0
+  listCtrlSetItem listCtrl pos 2 (show exp) 0
+  return ()

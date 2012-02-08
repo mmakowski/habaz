@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 {-|
 When the application is started the first window seen by the user i session window. It provides the user
 with a way to issue session commands like login, toggle ready state etc., as well as a list of logged in 
@@ -7,12 +8,13 @@ invitations.
 TODO: display invitation status
 
 -}
-module View (
-  View,
-  createView
-) where
+module View ( View
+            , createView
+            , (<|)
+            ) 
+where
 -- WX
-import Graphics.UI.WX hiding (Menu, menu, menuBar)
+import Graphics.UI.WX hiding (Event, Menu, menu, menuBar)
 import qualified Graphics.UI.WX as WX (Menu, menuBar)
 import Graphics.UI.WXCore (listCtrlGetItemCount, listCtrlGetItemText, listCtrlInsertItemWithData)
 -- Model
@@ -21,12 +23,14 @@ import Backgammon -- TODO: re-export from Model
 import Events
 import Data.List (sort)
 -- other view modules
-import View.PlayerList (createPlayerList)
+import View.PlayerList (createPlayerList, removePlayer, updatePlayer)
 -- player map
 import Data.Map (Map)
 import qualified Data.Map as Map
 -- Misc functions
 import Data.List (intercalate)
+
+import Control.Concurrent (forkIO)
 
 -- | All view elements that need to be acessed by Controller.
 data View = View { sessionWindow :: Frame ()
@@ -35,13 +39,12 @@ data View = View { sessionWindow :: Frame ()
                  }
 
 -- | Menu items which need to be accessed by Controller.
-data SessionMenu = Menu { logInItem :: MenuItem ()
-                        , logOutItem :: MenuItem ()
-                        , readyItem :: MenuItem ()
-                        , exitItem :: MenuItem ()
-                        , matchPane :: WX.Menu ()
-                        , inviteItem :: MenuItem ()
-                        }
+data SessionMenu = SessionMenu { logInItem :: MenuItem ()
+                               , logOutItem :: MenuItem ()
+                               , readyItem :: MenuItem ()
+                               , exitItem :: MenuItem ()
+                               , matchPane :: WX.Menu ()
+                               }
 
 startWidth, startHeight :: Int
 startWidth = 200
@@ -60,7 +63,7 @@ createView q = do
   let view = View f menuRepr playerList
   setCommandHandlers view q
   return view
-  
+ 
 createMenuBar :: IO ([WX.Menu ()], SessionMenu)
 createMenuBar = do
   session <- menuPane        [ text := "&Session" ]
@@ -74,22 +77,55 @@ createMenuBar = do
                              ]
   menuLine session
   exit <- menuItem session   [ text := "E&xit\tAlt+F4" ]
+
   match <- menuPane          [ text := "&Match" ]
   invite <- menuItem match   [ text := "&Invite"
                              , enabled := False 
                              ]
   return ([session, match],
-          Menu logIn logOut ready exit match invite)
+          SessionMenu logIn logOut ready exit match)
 
+
+instance EventConsumer View (IO View) where
+  v <| e = do
+    processEvent e v
+    return v
+
+processEvent :: Event -> View -> IO ()
+processEvent e = case e of
+  LoginSuccesful _    -> loginSuccesful
+  PlayerRemoved n     -> playerRemoved n
+  PlayerUpdated n r e -> playerUpdated n r e
+  ReadyOn             -> readyToggled True
+  ReadyOff            -> readyToggled False
+  _                   -> const $ return ()
+
+loginSuccesful :: View -> IO ()
+loginSuccesful v = do
+  set (logInItem  $ sessionMenu v) [ enabled := False ]
+  set (logOutItem $ sessionMenu v) [ enabled := True ]
+  set (readyItem  $ sessionMenu v) [ enabled := True ]
+
+playerRemoved :: String -> View -> IO ()
+playerRemoved name v = removePlayer (playerList v) name
+
+-- TODO: run this in a dedicated thread (freezes the UI otherwise)
+playerUpdated :: String -> Float -> Int -> View -> IO ()
+playerUpdated name rating exp v = updatePlayer (playerList v) name rating exp
+
+readyToggled :: Bool -> View -> IO ()
+readyToggled b v = set (readyItem $ sessionMenu v) [ checked := b ]
 
 type CommandHandler = IO ()
+
 setCommandHandler :: Commanding a => a -> CommandHandler -> IO ()
 setCommandHandler c h = set c [ on command := h ]
 
 setCommandHandlers :: View -> EventQueue -> IO ()
 setCommandHandlers (View w menu playerList) q = do
   setCommandHandler (logInItem menu) $ logIn q w
-  setCommandHandler (exitItem menu) $ close w
+  setCommandHandler (readyItem menu) $ putEvent q $ ToggleReadyRequest
+  setCommandHandler (exitItem menu)  $ close w
 
 logIn :: EventQueue -> Frame () -> CommandHandler
 logIn q w = do
@@ -122,53 +158,6 @@ promptForUsernameAndPassword w = do
 
 
 {- 
--- * Representation
-
--- | All view elements that need to be acessed by Controller.
-data View = View { sessionWindow :: Frame ()
-                 , sessionMenu :: SessionMenu
-                 , playerList :: ListCtrl ()
-                 }
-
--- | Menu items which need to be accessed by Controller.
-data SessionMenu = Menu { logInItem :: MenuItem ()
-                        , logOutItem :: MenuItem ()
-                        , readyItem :: MenuItem ()
-                        , exitItem :: MenuItem ()
-                        , matchPane :: WX.Menu ()
-                        , inviteItem :: MenuItem ()
-                        }
-
--- ** Wrappers for UI toolkit
-
-type CommandHandler = IO ()
-setCommandHandler :: Commanding a => a -> CommandHandler -> IO ()
-setCommandHandler c h = set c [ on command := h ]
-
--- * Actions
-
-type ViewUpdate a = View -> IO a
-
--- | Composition of ViewUpdates
-(|>) :: ViewUpdate a -> ViewUpdate b -> ViewUpdate b
-u1 |> u2 = \v -> do u1 v; u2 v
-
-disableLogIn = setMenuEnabled logInItem False
-enableLogIn = setMenuEnabled logInItem True
-disableLogOut = setMenuEnabled logOutItem False
-enableLogOut = setMenuEnabled logOutItem True
-disableReady = setMenuEnabled readyItem False
-enableReady = setMenuEnabled readyItem True
-setCheckedReady = setMenuChecked readyItem
--- TODO: these should be enabled/disabled depending on whether a player is selected in player list 
-enableInvite = setMenuEnabled inviteItem True
-disableInvite = setMenuEnabled inviteItem False
-  
-setMenuEnabled = setMenuBoolProp enabled
-setMenuChecked = setMenuBoolProp checked
-setMenuBoolProp prop itemAcc b v = set (itemAcc $ sessionMenu v) [ prop := b ]
-
-closeMainWindow v = close $ sessionWindow v
 
 showInfoMessage :: String -> ViewUpdate ()
 showInfoMessage msg v = infoDialog (sessionWindow v) "Info" msg
@@ -180,72 +169,9 @@ showErrorMessages msgs v = errorDialog (sessionWindow v) "Error" (intercalate "\
 showPlayers :: SessionState -> ViewUpdate ()
 showPlayers ss v = applyPlayerDeltas (playerList v) (playerMap $ players ss) 0 (sort $ playerDeltas $ players ss) 
 
-promptForUsernameAndPassword :: ViewUpdate (Maybe (String, String))
-promptForUsernameAndPassword v = do 
-  d <- dialog (sessionWindow v) [ text := "Log In" ]
-  usernameInput <- textEntry d []
-  passwordInput <- textEntry d []
-  ok <- button d [ text := "&OK" ]
-  cancel <- button d [ text := "&Cancel" ]
-  set d [ layout := margin 10 $ column 5 [
-             grid 5 5 [[label "user name", widget usernameInput],
-                       [label "password", widget passwordInput]],
-             row 5 [ widget ok, widget cancel]
-             ]
-        ]
-  showModal d (setActions ok cancel usernameInput passwordInput)
-  where
-    setActions ok cancel usernameInput passwordInput stop = do
-      set ok [ on command := do
-                  username <- get usernameInput text
-                  password <- get passwordInput text
-                  stop (Just (username, password)) ]
-      set cancel [ on command := stop Nothing ]
-        
 promptYesNo :: String -> ViewUpdate Bool
 promptYesNo prompt v = confirmDialog (sessionWindow v) "Confirm" prompt True
   
--- TODO: displaySession :: SessionState -> ViewUpdate
-
--- * Construction
-
-startWidth, startHeight :: Int
-startWidth = 200
-startHeight = 300
-
-
-createView :: IO View
-createView = do
-  f <- frame [ text := "Habaź" ]
-  (menuBar, menuRepr) <- createMenuBar
-  playerList <- createPlayerList f
-  set f [ WX.menuBar := menuBar
-        , layout := minsize (sz startWidth startHeight) $
-          column 5 [ fill $ widget playerList ]
-        ]
-  timer f [ interval := 1, on command := return () ]
-  return $ View f menuRepr playerList
-  
-createMenuBar :: IO ([WX.Menu ()], SessionMenu)
-createMenuBar = do
-  session <- menuPane        [ text := "&Session" ]
-  logIn <- menuItem session  [ text := "Log &In..." ]
-  logOut <- menuItem session [ text := "Log &Out"
-                             , enabled := False
-                             ]
-  ready <- menuItem session  [ text := "&Ready"
-                             , checkable := True
-                             , enabled := False
-                             ]
-  menuLine session
-  exit <- menuItem session   [ text := "E&xit\tAlt+F4" ]
-  match <- menuPane          [ text := "&Match" ]
-  invite <- menuItem match   [ text := "&Invite"
-                             , enabled := False 
-                             ]
-  return ([session, match],
-          Menu logIn logOut ready exit match invite)
-
 -- ** Board drawing
 
 barWidthRatio = 0.08
