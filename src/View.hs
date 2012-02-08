@@ -11,7 +11,6 @@ module View (
   View,
   createView
 ) where
-{-
 -- WX
 import Graphics.UI.WX hiding (Menu, menu, menuBar)
 import qualified Graphics.UI.WX as WX (Menu, menuBar)
@@ -19,18 +18,108 @@ import Graphics.UI.WXCore (listCtrlGetItemCount, listCtrlGetItemText, listCtrlIn
 -- Model
 import Model
 import Backgammon -- TODO: re-export from Model
+import Events
 import Data.List (sort)
 -- other view modules
-import View.PlayerList (createPlayerList, applyPlayerDeltas)
+import View.PlayerList (createPlayerList)
 -- player map
 import Data.Map (Map)
 import qualified Data.Map as Map
 -- Misc functions
 import Data.List (intercalate)
--}
 
-type View = ()
-createView = error "TODO: createView"
+-- | All view elements that need to be acessed by Controller.
+data View = View { sessionWindow :: Frame ()
+                 , sessionMenu :: SessionMenu
+                 , playerList :: ListCtrl ()
+                 }
+
+-- | Menu items which need to be accessed by Controller.
+data SessionMenu = Menu { logInItem :: MenuItem ()
+                        , logOutItem :: MenuItem ()
+                        , readyItem :: MenuItem ()
+                        , exitItem :: MenuItem ()
+                        , matchPane :: WX.Menu ()
+                        , inviteItem :: MenuItem ()
+                        }
+
+startWidth, startHeight :: Int
+startWidth = 200
+startHeight = 300
+
+createView :: EventQueue -> IO View
+createView q = do
+  f <- frame [ text := "Habaź" ]
+  (menuBar, menuRepr) <- createMenuBar
+  playerList <- createPlayerList f
+  set f [ WX.menuBar := menuBar
+        , layout := minsize (sz startWidth startHeight) $
+          column 5 [ fill $ widget playerList ]
+        ]
+  timer f [ interval := 1, on command := return () ]
+  let view = View f menuRepr playerList
+  setCommandHandlers view q
+  return view
+  
+createMenuBar :: IO ([WX.Menu ()], SessionMenu)
+createMenuBar = do
+  session <- menuPane        [ text := "&Session" ]
+  logIn <- menuItem session  [ text := "Log &In..." ]
+  logOut <- menuItem session [ text := "Log &Out"
+                             , enabled := False
+                             ]
+  ready <- menuItem session  [ text := "&Ready"
+                             , checkable := True
+                             , enabled := False
+                             ]
+  menuLine session
+  exit <- menuItem session   [ text := "E&xit\tAlt+F4" ]
+  match <- menuPane          [ text := "&Match" ]
+  invite <- menuItem match   [ text := "&Invite"
+                             , enabled := False 
+                             ]
+  return ([session, match],
+          Menu logIn logOut ready exit match invite)
+
+
+type CommandHandler = IO ()
+setCommandHandler :: Commanding a => a -> CommandHandler -> IO ()
+setCommandHandler c h = set c [ on command := h ]
+
+setCommandHandlers :: View -> EventQueue -> IO ()
+setCommandHandlers (View w menu playerList) q = do
+  setCommandHandler (logInItem menu) $ logIn q w
+  setCommandHandler (exitItem menu) $ close w
+
+logIn :: EventQueue -> Frame () -> CommandHandler
+logIn q w = do
+  maybeUp <- promptForUsernameAndPassword w
+  case maybeUp of
+    Nothing -> return ()
+    Just (user, pass) -> putEvent q $ LoginRequest user pass
+
+promptForUsernameAndPassword :: Frame () -> IO (Maybe (String, String))
+promptForUsernameAndPassword w = do 
+  d <- dialog w [ text := "Log In" ]
+  usernameInput <- textEntry d []
+  passwordInput <- textEntry d []
+  ok <- button d [ text := "&OK" ]
+  cancel <- button d [ text := "&Cancel" ]
+  set d [ layout := margin 10 $ column 5 [
+             grid 5 5 [[label "user name", widget usernameInput],
+                       [label "password", widget passwordInput]],
+             row 5 [ widget ok, widget cancel]
+             ]
+        ]
+  showModal d (setActions ok cancel usernameInput passwordInput)
+  where
+    setActions ok cancel usernameInput passwordInput stop = do
+      set ok [ on command := do
+                  username <- get usernameInput text
+                  password <- get passwordInput text
+                  stop (Just (username, password)) ]
+      set cancel [ on command := stop Nothing ]
+
 
 {- 
 -- * Representation

@@ -1,26 +1,25 @@
-module View.PlayerList where
-{-
-module View.PlayerList (
-  createPlayerList,
-  applyPlayerDeltas
-) where
+module View.PlayerList ( createPlayerList
+                       -- , applyPlayerDeltas
+                       ) 
+where
 -- WX
 import Graphics.UI.WX 
 import Graphics.UI.WXCore (listCtrlDeleteItem, listCtrlGetItemCount, listCtrlGetItemText, listCtrlInsertItemWithData, listCtrlSetItem)
+{-
 -- Player map
 import qualified Data.Map as Map
 -- Model
 import Model
 -- misc
 import Data.Maybe (fromMaybe)
-
+-}
 createPlayerList :: Frame () -> IO (ListCtrl ())
 createPlayerList f = listCtrl f [ columns := [ ("Name", AlignLeft, 120)
                                              , ("Rating", AlignLeft, 50)
                                              ]
                                 ]
 
-
+{-
 applyPlayerDeltas :: ListCtrl () -> PlayerMap -> Int -> [PlayerDelta] -> IO ()
 applyPlayerDeltas _ _ _ [] = return ()
 applyPlayerDeltas listCtrl playerMap pos (pd:pds) = do

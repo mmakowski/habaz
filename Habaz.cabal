@@ -26,10 +26,10 @@ executable habaz
                   FIBSClient,
                   FIBSClient.Commands,
                   FIBSClient.Messages,
+                  FIBSConnector,
                   Model,
                   View,
-                  View.PlayerList,
-                  FIBSConnector
+                  View.PlayerList
 
 test-suite all-tests
   type:           exitcode-stdio-1.0
