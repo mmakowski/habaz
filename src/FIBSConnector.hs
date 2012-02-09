@@ -9,6 +9,8 @@ where
 import Control.Concurrent (forkIO)
 -- looping
 import Control.Monad (forM_)
+-- logging
+import System.Log.Logger (debugM)
 
 import FIBSClient
 import Events (putEvent, Event, EventQueue, EventConsumer, (<|))
@@ -61,9 +63,15 @@ registrationConnector q user pass = error "TODO"
 
 messageProcessor :: EventQueue -> [ParseResult FIBSMessage] -> IO ()
 messageProcessor q (msg:msgs) = do
-  print msg -- TODO: proper logging of messages
+  debugM "FIBS.message" (show msg)
   forM_ (eventsFor msg) $ putEvent q
   messageProcessor q msgs
+
+messageFile :: FilePath
+messageFile = "fibs_messages.log"
+
+commandFile :: FilePath
+commandFile = "fibs_commands.log"
 
 -- translation between FIBS messages/commands and events
 
