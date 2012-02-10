@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 {-|
 When the application is started the first window seen by the user i session window. It provides the user
 with a way to issue session commands like login, toggle ready state etc., as well as a list of logged in 
@@ -8,10 +7,7 @@ invitations.
 TODO: display invitation status
 
 -}
-module View ( View
-            , createView
-            , viewConsumer
-            ) 
+module View ( viewConsumer ) 
 where
 -- WX
 import Graphics.UI.WX hiding (Event, Menu, menu, menuBar)
@@ -47,6 +43,11 @@ data SessionMenu = SessionMenu { logInItem :: MenuItem ()
                                , exitItem :: MenuItem ()
                                , matchPane :: WX.Menu ()
                                }
+
+viewConsumer :: EventQueueWriter -> IO EventConsumer
+viewConsumer q = do
+  v <- createView q
+  viewConsumer' v q
 
 startWidth, startHeight :: Int
 startWidth = 200
@@ -88,10 +89,10 @@ createMenuBar = do
           SessionMenu logIn logOut ready exit match)
 
 
-viewConsumer :: View -> EventQueueWriter -> IO EventConsumer
-viewConsumer v q = return $ EventConsumer $ \e -> do
+viewConsumer' :: View -> EventQueueWriter -> IO EventConsumer
+viewConsumer' v q = return $ EventConsumer $ \e -> do
   processEvent e q v
-  DT.sequence $ Just $ viewConsumer v q
+  DT.sequence $ Just $ viewConsumer' v q
 
 processEvent :: Event -> EventQueueWriter -> View -> IO ()
 processEvent e q = case e of

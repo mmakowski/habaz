@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 {-
 Module responsible for interfacing between the event queue and FIBS client
 -}

@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
-
 {-|
 This module contains data types and functions modeling the state of FIBS session. There are the following
 levels of state:
