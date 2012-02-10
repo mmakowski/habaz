@@ -13,6 +13,7 @@ import Control.Monad (forM_)
 import System.Log.Logger (debugM)
 
 import FIBSClient
+import DomainTypes
 import Events (putEvent, Event, EventQueue, EventConsumer, (<|))
 import qualified Events as E (Event (..))
 
@@ -55,8 +56,13 @@ commandSender q conn = FIBSConnector $ commandSendingTransition q conn
 
 commandSendingTransition :: EventQueue -> WriteOnlyConnection -> Event -> IO FIBSConnector
 commandSendingTransition q conn e = do 
-  forM_ (commandsFor e) $ sendCommand conn
+  forM_ (commandsFor e) $ logAndSendCommand conn
   return $ commandSender q conn
+
+logAndSendCommand :: WriteOnlyConnection -> FIBSCommand -> IO ()
+logAndSendCommand conn cmd = do
+  debugM "FIBS.command" (show cmd)
+  sendCommand conn cmd
 
 registrationConnector :: EventQueue -> String -> String -> IO FIBSConnector
 registrationConnector q user pass = error "TODO"
@@ -66,12 +72,6 @@ messageProcessor q (msg:msgs) = do
   debugM "FIBS.message" (show msg)
   forM_ (eventsFor msg) $ putEvent q
   messageProcessor q msgs
-
-messageFile :: FilePath
-messageFile = "fibs_messages.log"
-
-commandFile :: FilePath
-commandFile = "fibs_commands.log"
 
 -- translation between FIBS messages/commands and events
 
@@ -92,7 +92,7 @@ eventsFor' (OwnInfo name _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ready _ _ _ _) =
 eventsFor' ReadyOn            = [ E.ReadyOn ]
 eventsFor' ReadyOff           = [ E.ReadyOff ]
 eventsFor' (Welcome name _ _) = [ E.LoginSuccesful name ]
-eventsFor' (WhoInfo name _ _ ready _ rating exp _ _ _ _ _) =
-                                [ E.PlayerUpdated name rating exp ]
+eventsFor' (WhoInfo name opp _ ready _ rating exp _ _ _ _ _) =
+                                [ E.PlayerUpdated (PlayerInfo name rating exp (ready && (opp == Nothing))) ]
 eventsFor' _                  = []
 

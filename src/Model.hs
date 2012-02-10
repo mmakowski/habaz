@@ -11,7 +11,6 @@ list of erros, the connection (when connected), list of players (when connected)
 
 3. /Game/: the board, who has the dice etc.
 
-Levels from /Match/ down are pure, /Session/ level involves IO actions.
 -}
 module Model ( Session
              , (<|)

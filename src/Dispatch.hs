@@ -20,5 +20,5 @@ dispatchEvents s v f q = do
   debugM "Habaź.event" (show e)
   let s' = s <| e
   f' <- f <| e
-  v' <- v <| e
+  v' <- (v, q) <| e
   dispatchEvents s' v' f' q

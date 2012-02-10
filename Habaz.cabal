@@ -23,6 +23,7 @@ executable habaz
   other-modules:  
                   Backgammon,
                   Dispatch,
+                  DomainTypes,
                   Events,
                   FIBSClient,
                   FIBSClient.Commands,

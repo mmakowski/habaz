@@ -19,8 +19,9 @@ import qualified Graphics.UI.WX as WX (Menu, menuBar)
 import Graphics.UI.WXCore (listCtrlGetItemCount, listCtrlGetItemText, listCtrlInsertItemWithData)
 -- Model
 import Model
-import Backgammon -- TODO: re-export from Model
+import Backgammon
 import Events
+import DomainTypes 
 import Data.List (sort)
 -- other view modules
 import View.PlayerList (createPlayerList, removePlayer, updatePlayer)
@@ -86,19 +87,23 @@ createMenuBar = do
           SessionMenu logIn logOut ready exit match)
 
 
-instance EventConsumer View (IO View) where
-  v <| e = do
-    processEvent e v
+instance EventConsumer (View, EventQueue) (IO View) where
+  (v, q) <| e = do
+    processEvent e q v
     return v
 
-processEvent :: Event -> View -> IO ()
-processEvent e = case e of
+processEvent :: Event -> EventQueue -> View -> IO ()
+processEvent e q = case e of
+  LoginFailed msg     -> loginFailed msg q
   LoginSuccesful _    -> loginSuccesful
   PlayerRemoved n     -> playerRemoved n
-  PlayerUpdated n r e -> playerUpdated n r e
+  PlayerUpdated pi    -> playerUpdated pi
   ReadyOn             -> readyToggled True
   ReadyOff            -> readyToggled False
   _                   -> const $ return ()
+
+loginFailed :: String -> EventQueue -> View -> IO ()
+loginFailed = error "TODO"
 
 loginSuccesful :: View -> IO ()
 loginSuccesful v = do
@@ -109,9 +114,8 @@ loginSuccesful v = do
 playerRemoved :: String -> View -> IO ()
 playerRemoved name v = removePlayer (playerList v) name
 
--- TODO: run this in a dedicated thread (freezes the UI otherwise)
-playerUpdated :: String -> Float -> Int -> View -> IO ()
-playerUpdated name rating exp v = updatePlayer (playerList v) name rating exp
+playerUpdated :: PlayerInfo -> View -> IO ()
+playerUpdated pinfo v = updatePlayer (playerList v) pinfo
 
 readyToggled :: Bool -> View -> IO ()
 readyToggled b v = set (readyItem $ sessionMenu v) [ checked := b ]

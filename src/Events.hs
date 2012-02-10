@@ -15,13 +15,15 @@ where
 import Control.Concurrent.STM (atomically) 
 import Control.Concurrent.STM.TChan (TChan, newTChan, writeTChan, readTChan)
 
+import DomainTypes
+
 data Event = Disconnected
            | Error String
            | LoginRequest String String
            | LoginFailed String
            | LoginSuccesful String
            | ToggleReadyRequest
-           | PlayerUpdated String Float Int
+           | PlayerUpdated PlayerInfo
            | PlayerRemoved String
            | ReadyOn
            | ReadyOff
