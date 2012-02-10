@@ -10,7 +10,7 @@ TODO: display invitation status
 -}
 module View ( View
             , createView
-            , (<|)
+            , viewConsumer
             ) 
 where
 -- WX
@@ -23,6 +23,7 @@ import Backgammon
 import Events
 import DomainTypes 
 import Data.List (sort)
+import qualified Data.Traversable as DT (sequence)
 -- other view modules
 import View.PlayerList (createPlayerList, removePlayer, updatePlayer)
 -- player map
@@ -51,7 +52,7 @@ startWidth, startHeight :: Int
 startWidth = 200
 startHeight = 300
 
-createView :: EventQueue -> IO View
+createView :: EventQueueWriter -> IO View
 createView q = do
   f <- frame [ text := "Habaź" ]
   (menuBar, menuRepr) <- createMenuBar
@@ -87,12 +88,12 @@ createMenuBar = do
           SessionMenu logIn logOut ready exit match)
 
 
-instance EventConsumer (View, EventQueue) (IO View) where
-  (v, q) <| e = do
-    processEvent e q v
-    return v
+viewConsumer :: View -> EventQueueWriter -> IO EventConsumer
+viewConsumer v q = return $ EventConsumer $ \e -> do
+  processEvent e q v
+  DT.sequence $ Just $ viewConsumer v q
 
-processEvent :: Event -> EventQueue -> View -> IO ()
+processEvent :: Event -> EventQueueWriter -> View -> IO ()
 processEvent e q = case e of
   LoginFailed msg     -> loginFailed msg q
   LoginSuccesful _    -> loginSuccesful
@@ -102,7 +103,7 @@ processEvent e q = case e of
   ReadyOff            -> readyToggled False
   _                   -> const $ return ()
 
-loginFailed :: String -> EventQueue -> View -> IO ()
+loginFailed :: String -> EventQueueWriter -> View -> IO ()
 loginFailed = error "TODO"
 
 loginSuccesful :: View -> IO ()
@@ -125,13 +126,13 @@ type CommandHandler = IO ()
 setCommandHandler :: Commanding a => a -> CommandHandler -> IO ()
 setCommandHandler c h = set c [ on command := h ]
 
-setCommandHandlers :: View -> EventQueue -> IO ()
+setCommandHandlers :: View -> EventQueueWriter -> IO ()
 setCommandHandlers (View w menu playerList) q = do
   setCommandHandler (logInItem menu) $ logIn q w
   setCommandHandler (readyItem menu) $ putEvent q $ ToggleReadyRequest
   setCommandHandler (exitItem menu)  $ close w
 
-logIn :: EventQueue -> Frame () -> CommandHandler
+logIn :: EventQueueWriter -> Frame () -> CommandHandler
 logIn q w = do
   maybeUp <- promptForUsernameAndPassword w
   case maybeUp of

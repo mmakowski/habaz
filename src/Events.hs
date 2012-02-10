@@ -3,9 +3,10 @@
 
 -}
 module Events ( Event (..)
-              , EventQueue
-              , EventConsumer
-              , (<|)
+              , EventQueueReader
+              , EventQueueWriter
+              , EventConsumer (..)
+              , consume
               , newEventQueue
               , getEvent
               , putEvent
@@ -13,7 +14,7 @@ module Events ( Event (..)
 where
 -- TChan for event queue
 import Control.Concurrent.STM (atomically) 
-import Control.Concurrent.STM.TChan (TChan, newTChan, writeTChan, readTChan)
+import Control.Concurrent.STM.TChan (TChan, newTChanIO, writeTChan, readTChan)
 
 import DomainTypes
 
@@ -30,19 +31,29 @@ data Event = Disconnected
            | RegistrationRequest String String
   deriving (Eq, Show)
 
-class EventConsumer a b where
-  (<|) :: a     -- ^ initial state of consumer
-       -> Event -- ^ the event that triggers transition
-       -> b     -- ^ final state of consumer
 
+-- | event consumer consumes an event yielding a new consumer (potentially) and some IO actions
+data EventConsumer = EventConsumer (Event -> IO (Maybe EventConsumer))
+
+consume :: Event -> EventConsumer -> IO (Maybe EventConsumer)
+consume e (EventConsumer c) = c e
+
+-- | event queue is a transactional channel of Events
 type EventQueue = TChan Event
 
-newEventQueue :: IO EventQueue
-newEventQueue = atomically $ newTChan
+-- | the reader end of EventQueue
+data EventQueueReader = EventQueueReader EventQueue
+-- | the writer end of EventQueue
+data EventQueueWriter = EventQueueWriter EventQueue
 
-getEvent :: EventQueue -> IO Event
-getEvent q = atomically $ readTChan q
+newEventQueue :: IO (EventQueueReader, EventQueueWriter)
+newEventQueue = do
+  q <- newTChanIO
+  return (EventQueueReader q, EventQueueWriter q)
 
-putEvent :: EventQueue -> Event -> IO ()
-putEvent q e = atomically $ writeTChan q e
+getEvent :: EventQueueReader -> IO Event
+getEvent (EventQueueReader q) = atomically $ readTChan q
+
+putEvent :: EventQueueWriter -> Event -> IO ()
+putEvent (EventQueueWriter q) e = atomically $ writeTChan q e
 

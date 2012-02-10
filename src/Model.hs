@@ -29,8 +29,10 @@ data State a b = State a (b -> State a b)
 instance Show a => Show (State a b) where show (State d _) = show d
 instance Eq a => Eq (State a b) where (State d1 _) == (State d2 _) = d1 == d2
 
-instance EventConsumer (State a Event) (State a Event) where
-  (State _ t) <| e = t e
+-- TODO: how do we combine session state with other event consumers?
+
+(<|) :: State a b -> b -> State a b
+(State _ t) <| e = t e
 
 -- | Session is a state of a state machine whose transitions are triggered by Events
 type Session = State SessionData Event

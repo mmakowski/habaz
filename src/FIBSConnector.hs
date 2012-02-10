@@ -1,8 +1,8 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
-module FIBSConnector ( FIBSConnector
-                     , (<|)
-                     , fibsConnector
-                     ) 
+{-
+Module responsible for interfacing between the event queue and FIBS client
+-}
+module FIBSConnector ( fibsConnector ) 
 where
 
 -- FIBS message processing thread" 
@@ -14,60 +14,54 @@ import System.Log.Logger (debugM)
 
 import FIBSClient
 import DomainTypes
-import Events (putEvent, Event, EventQueue, EventConsumer, (<|))
+import Events (putEvent, Event, EventQueueWriter, EventConsumer (..))
 import qualified Events as E (Event (..))
 
-data FIBSConnector = FIBSConnector (Event -> IO FIBSConnector)
-
--- | performs connector transition under supplied event
-instance EventConsumer FIBSConnector (IO FIBSConnector) where
-  (FIBSConnector f) <| e = f e
-
 -- | a connector that handles login and register events
-fibsConnector :: EventQueue -> FIBSConnector
-fibsConnector q = FIBSConnector $ loginOrRegisterTransition q
+fibsConnector :: EventQueueWriter -> EventConsumer
+fibsConnector q = EventConsumer $ loginOrRegisterTransition q
 
-loginOrRegisterTransition :: EventQueue -> Event -> IO FIBSConnector
+loginOrRegisterTransition :: EventQueueWriter -> Event -> IO (Maybe EventConsumer)
 loginOrRegisterTransition q e = case e of
   E.LoginRequest user pass        -> loginConnector q user pass
   E.RegistrationRequest user pass -> registrationConnector q user pass
-  _                               -> return $ fibsConnector q
+  _                               -> return $ Just $ fibsConnector q
 
 -- | a connector that handles logging in
-loginConnector :: EventQueue -> String -> String -> IO FIBSConnector
+loginConnector :: EventQueueWriter -> String -> String -> IO (Maybe EventConsumer)
 loginConnector q user pass = do
   conn <- connect defaultFIBSHost defaultFIBSPort
   loginStatus <- login conn "Habaź_v0.1.0" user pass
   case loginStatus of
     LoginFailure msg -> do putEvent q $ E.LoginFailed msg
                            disconnect conn
-                           return $ fibsConnector q
+                           return $ Just $ fibsConnector q
     LoginSuccess     -> startProcessingMessages q conn
 
-startProcessingMessages :: EventQueue -> ReadWriteConnection -> IO FIBSConnector
+startProcessingMessages :: EventQueueWriter -> ReadWriteConnection -> IO (Maybe EventConsumer)
 startProcessingMessages q rwconn = do
   (msgs, woconn) <- readMessages rwconn
   forkIO $ messageProcessor q msgs
-  return $ commandSender q woconn
+  commandSender q woconn
 
 -- | a connector that translates events to FIBS commands and sends them to the server
-commandSender :: EventQueue -> WriteOnlyConnection -> FIBSConnector
-commandSender q conn = FIBSConnector $ commandSendingTransition q conn
+commandSender :: EventQueueWriter -> WriteOnlyConnection -> IO (Maybe EventConsumer)
+commandSender q conn = return $ Just $ EventConsumer $ commandSendingTransition q conn
 
-commandSendingTransition :: EventQueue -> WriteOnlyConnection -> Event -> IO FIBSConnector
+commandSendingTransition :: EventQueueWriter -> WriteOnlyConnection -> Event -> IO (Maybe EventConsumer)
 commandSendingTransition q conn e = do 
   forM_ (commandsFor e) $ logAndSendCommand conn
-  return $ commandSender q conn
+  commandSender q conn
 
 logAndSendCommand :: WriteOnlyConnection -> FIBSCommand -> IO ()
 logAndSendCommand conn cmd = do
   debugM "FIBS.command" (show cmd)
   sendCommand conn cmd
 
-registrationConnector :: EventQueue -> String -> String -> IO FIBSConnector
+registrationConnector :: EventQueueWriter -> String -> String -> IO (Maybe EventConsumer)
 registrationConnector q user pass = error "TODO"
 
-messageProcessor :: EventQueue -> [ParseResult FIBSMessage] -> IO ()
+messageProcessor :: EventQueueWriter -> [ParseResult FIBSMessage] -> IO ()
 messageProcessor q (msg:msgs) = do
   debugM "FIBS.message" (show msg)
   forM_ (eventsFor msg) $ putEvent q

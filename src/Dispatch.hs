@@ -6,19 +6,14 @@ module Dispatch (
 ) where
 -- logging
 import System.Log.Logger (debugM)
+import Data.Maybe (catMaybes)
 
-import Events (EventQueue, getEvent)
-import Model (Session, (<|))
-import FIBSConnector (FIBSConnector, (<|))
-import View (View, (<|))
+import Events (EventConsumer, EventQueueReader, consume, getEvent)
 
--- | contiuously processes events from the queue and dispatches them to all
--- components of the application.
-dispatchEvents :: Session -> View -> FIBSConnector -> EventQueue -> IO ()
-dispatchEvents s v f q = do
+-- | contiuously processes events from the queue and dispatches them to all consumers
+dispatchEvents :: [EventConsumer] -> EventQueueReader -> IO ()
+dispatchEvents ecs q = do
   e <- getEvent q
   debugM "Habaź.event" (show e)
-  let s' = s <| e
-  f' <- f <| e
-  v' <- (v, q) <| e
-  dispatchEvents s' v' f' q
+  ecs' <- mapM (consume e) ecs
+  dispatchEvents (catMaybes ecs') q

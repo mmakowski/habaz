@@ -1,8 +1,8 @@
 module Main where
-import Model (initialSession)
+--import Model (sessionConsumer) TODO: how do we combine session state with other consumers?
 import Events (newEventQueue)
 import FIBSConnector (fibsConnector)
-import View (createView)
+import View (createView, viewConsumer)
 import Dispatch (dispatchEvents)
 
 import Graphics.UI.WX (start)
@@ -16,9 +16,12 @@ import System.Log.Handler.Simple (verboseStreamHandler)
 main :: IO ()
 main = start $ do
   setUpLogging
-  eventQueue <- newEventQueue
-  view <- createView eventQueue
-  forkIO $ dispatchEvents initialSession view (fibsConnector eventQueue) eventQueue 
+  (qreader, qwriter) <- newEventQueue
+  view <- createView qwriter
+  consumers <- sequence [ viewConsumer view qwriter
+  						, return $ fibsConnector qwriter
+                        ]
+  forkIO $ dispatchEvents consumers qreader
 
 setUpLogging :: IO ()
 setUpLogging = do
