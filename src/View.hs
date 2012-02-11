@@ -64,7 +64,7 @@ createView q = do
         ]
   timer f [ interval := 1, on command := return () ]
   let view = View f menuRepr playerList
-  setCommandHandlers view q
+  setHandlers view q
   return view
  
 createMenuBar :: IO ([WX.Menu ()], SessionMenu)
@@ -118,16 +118,19 @@ playerUpdated pinfo v = updatePlayer (playerList v) pinfo
 readyToggled :: Bool -> View -> IO ()
 readyToggled b v = set (readyItem $ sessionMenu v) [ checked := b ]
 
+-- * handlers
+
+setHandlers :: View -> EventQueueWriter -> IO ()
+setHandlers v@(View w menu playerList) q = do
+  setCommandHandler (logInItem menu) $ logIn q v
+  setCommandHandler (readyItem menu) $ putEvent q ToggleReadyRequest
+  setCommandHandler (exitItem menu)  $ close w
+  wrapMouseHandler  playerList       $ invite q v
+
 type CommandHandler = IO ()
 
 setCommandHandler :: Commanding a => a -> CommandHandler -> IO ()
 setCommandHandler c h = set c [ on command := h ]
-
-setCommandHandlers :: View -> EventQueueWriter -> IO ()
-setCommandHandlers v@(View w menu playerList) q = do
-  setCommandHandler (logInItem menu) $ logIn q v
-  setCommandHandler (readyItem menu) $ putEvent q ToggleReadyRequest
-  setCommandHandler (exitItem menu)  $ close w
 
 logIn :: EventQueueWriter -> View -> CommandHandler
 logIn q v = do
@@ -135,6 +138,20 @@ logIn q v = do
   case maybeUp of
     Nothing -> return ()
     Just (user, pass) -> requestLogin q v user pass
+
+type MouseHandler = EventMouse -> IO ()
+type MouseHandlerWrapper = MouseHandler -> MouseHandler
+
+wrapMouseHandler :: Reactive a => a -> MouseHandlerWrapper -> IO ()
+wrapMouseHandler ctl wrapper = do
+  existingHandler <- get ctl $ on mouse
+  set ctl [ on mouse := wrapper existingHandler ]
+
+invite :: EventQueueWriter -> View -> MouseHandlerWrapper
+invite q v d (MouseLeftDClick _ _) = error "TODO"
+invite _ _ d e = d e
+
+-- ** login and registrations
 
 requestLogin :: EventQueueWriter -> View -> String -> String -> IO ()
 requestLogin q v user pass = do
@@ -197,6 +214,8 @@ promptForUsernameAndPassword w = do
                   password <- get passwordInput text
                   stop (Just (username, password)) ]
       set cancel [ on command := stop Nothing ]
+
+-- * generic dialogues
 
 promptYesNo :: View -> String -> IO Bool
 promptYesNo v prompt = confirmDialog (sessionWindow v) "Confirm" prompt True
