@@ -25,6 +25,7 @@ import DomainTypes
 data Event = AddEventConsumer String EventConsumer
            | Disconnected
            | Error String
+           | InviteRequest String String
            | LoginFailed String
            | LoginRequest String String
            | LoginSuccesful String

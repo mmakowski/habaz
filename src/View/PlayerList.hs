@@ -1,11 +1,12 @@
 module View.PlayerList ( createPlayerList
                        , removePlayer
-                       , updatePlayer
+                       , selectedPlayer
+                       , updatePlayer                       
                        ) 
 where
 -- WX
 import Graphics.UI.WX 
-import Graphics.UI.WXCore (listCtrlDeleteItem, listCtrlGetItemCount, listCtrlGetItemText, listCtrlInsertItemWithData, listCtrlSetItem)
+import Graphics.UI.WXCore
 
 import DomainTypes
 
@@ -24,6 +25,18 @@ createPlayerList f = listCtrl f [ columns := [ ("Name", AlignLeft, 120)
                                              , ("Invitable", AlignLeft, 50)
                                              ]
                                 ]
+
+selectedPlayer :: ListCtrl () -> IO (Maybe String)
+selectedPlayer = selectedPlayer' 0
+
+selectedPlayer' :: Int -> ListCtrl () -> IO (Maybe String)
+selectedPlayer' pos ctl = do
+  itemCount <- listCtrlGetItemCount ctl
+  if pos >= itemCount then return Nothing
+    else do
+      state <- listCtrlGetItemState ctl pos wxLIST_STATE_SELECTED
+      if state == wxLIST_STATE_SELECTED then (return . Just) =<< listCtrlGetItemText ctl pos
+        else selectedPlayer' (pos + 1) ctl
 
 removePlayer :: ListCtrl () -> String -> IO ()
 removePlayer listCtrl name = do

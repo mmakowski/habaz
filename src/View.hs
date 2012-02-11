@@ -12,23 +12,17 @@ where
 -- WX
 import Graphics.UI.WX hiding (Event, Menu, menu, menuBar)
 import qualified Graphics.UI.WX as WX (Menu, menuBar)
-import Graphics.UI.WXCore (listCtrlGetItemCount, listCtrlGetItemText, listCtrlInsertItemWithData)
 -- Model
 import Model
 import Backgammon
 import Events
 import DomainTypes 
-import Data.List (sort)
 import qualified Data.Traversable as DT (sequence)
 -- other view modules
-import View.PlayerList (createPlayerList, removePlayer, updatePlayer)
+import View.PlayerList
 -- player map
 import Data.Map (Map)
 import qualified Data.Map as Map
--- Misc functions
-import Data.List (intercalate)
-
-import Control.Concurrent (forkIO)
 
 -- | All view elements that need to be acessed by Controller.
 data View = View { sessionWindow :: Frame ()
@@ -62,7 +56,8 @@ createView q = do
         , layout := minsize (sz startWidth startHeight) $
           column 5 [ fill $ widget playerList ]
         ]
-  timer f [ interval := 1, on command := return () ]
+  --TODO: this used to be essential (why?), but now everything seems to be working ok without it
+  --timer f [ interval := 100, on command := return () ]
   let view = View f menuRepr playerList
   setHandlers view q
   return view
@@ -96,6 +91,7 @@ viewConsumer' v q = return $ EventConsumer $ \e -> do
 
 processEvent :: Event -> EventQueueWriter -> View -> IO ()
 processEvent e q = case e of
+  Error msg           -> showErrorMessage msg
   LoginSuccesful _    -> loginSuccesful
   PlayerRemoved n     -> playerRemoved n
   PlayerUpdated pi    -> playerUpdated pi
@@ -106,8 +102,8 @@ processEvent e q = case e of
 loginSuccesful :: View -> IO ()
 loginSuccesful v = do
   set (logInItem  $ sessionMenu v) [ enabled := False ]
-  set (logOutItem $ sessionMenu v) [ enabled := True ]
-  set (readyItem  $ sessionMenu v) [ enabled := True ]
+  set (logOutItem $ sessionMenu v) [ enabled := True  ]
+  set (readyItem  $ sessionMenu v) [ enabled := True  ]
 
 playerRemoved :: String -> View -> IO ()
 playerRemoved name v = removePlayer (playerList v) name
@@ -125,7 +121,7 @@ setHandlers v@(View w menu playerList) q = do
   setCommandHandler (logInItem menu) $ logIn q v
   setCommandHandler (readyItem menu) $ putEvent q ToggleReadyRequest
   setCommandHandler (exitItem menu)  $ close w
-  wrapMouseHandler  playerList       $ invite q v
+  wrapMouseHandler  playerList       $ playerListMouseHandler q v
 
 type CommandHandler = IO ()
 
@@ -133,11 +129,7 @@ setCommandHandler :: Commanding a => a -> CommandHandler -> IO ()
 setCommandHandler c h = set c [ on command := h ]
 
 logIn :: EventQueueWriter -> View -> CommandHandler
-logIn q v = do
-  maybeUp <- promptForUsernameAndPassword $ sessionWindow v
-  case maybeUp of
-    Nothing -> return ()
-    Just (user, pass) -> requestLogin q v user pass
+logIn q v = whenOK (promptForUsernameAndPassword $ sessionWindow v) $ uncurry $ requestLogin q v
 
 type MouseHandler = EventMouse -> IO ()
 type MouseHandlerWrapper = MouseHandler -> MouseHandler
@@ -147,9 +139,9 @@ wrapMouseHandler ctl wrapper = do
   existingHandler <- get ctl $ on mouse
   set ctl [ on mouse := wrapper existingHandler ]
 
-invite :: EventQueueWriter -> View -> MouseHandlerWrapper
-invite q v d (MouseLeftDClick _ _) = error "TODO"
-invite _ _ d e = d e
+playerListMouseHandler :: EventQueueWriter -> View -> MouseHandlerWrapper
+playerListMouseHandler q v _ (MouseLeftDClick _ _) = whenOK (selectedPlayer $ playerList v) $ invite q v
+playerListMouseHandler _ _ d e = d e
 
 -- ** login and registrations
 
@@ -184,7 +176,7 @@ registrationResultConsumer q v user pass = EventConsumer $ \e -> case e of
     logInAfterRegistration q v user pass
     terminate "registrationResultConsumer"
   RegistrationFailed msg -> do
-    showInfoMessage v $ "Registration failed: \"" ++ msg ++ "\"."
+    showInfoMessage ("Registration failed: \"" ++ msg ++ "\".") v
     terminate "registrationResultConsumer"
   _                      -> continue $ registrationResultConsumer q v user pass
 
@@ -215,25 +207,55 @@ promptForUsernameAndPassword w = do
                   stop (Just (username, password)) ]
       set cancel [ on command := stop Nothing ]
 
+-- ** invitations
+
+invite :: EventQueueWriter -> View -> String -> IO ()
+invite q v name = whenOK (promptForMatchLength (sessionWindow v) name) $ requestInvitation q name
+
+requestInvitation :: EventQueueWriter -> String -> String -> IO ()
+requestInvitation q name len = putEvent q $ InviteRequest name len
+
+promptForMatchLength :: Frame () -> String -> IO (Maybe String)
+promptForMatchLength w name = do
+  d <- dialog w [ text := "Log In" ]
+  matchLengthInput <- textEntry d [ text := "3" ]
+  ok <- button d [ text := "&Yes" ]
+  cancel <- button d [ text := "&No" ]
+  set d [ layout := margin 10 $ column 5 [ row 5 [ label $ "Invite " ++ name]
+                                         , grid 5 5 [[ label $ "Invite " ++ name ++ " to"
+                                                     , widget matchLengthInput
+                                                     , label "point match?"
+                                                     ]]
+                                         , row 5 [ widget ok, widget cancel]
+                                         ]
+        ]
+  showModal d (setActions ok cancel matchLengthInput)
+  where
+    setActions ok cancel matchLengthInput stop = do
+      set ok     [ on command := get matchLengthInput text >>= (stop . Just) ]
+      set cancel [ on command := stop Nothing ]
+
 -- * generic dialogues
 
 promptYesNo :: View -> String -> IO Bool
 promptYesNo v prompt = confirmDialog (sessionWindow v) "Confirm" prompt True
 
-showInfoMessage :: View -> String -> IO ()
-showInfoMessage v msg = infoDialog (sessionWindow v) "Info" msg
-
-{- 
-
-showInfoMessage :: String -> ViewUpdate ()
+showInfoMessage :: String -> View -> IO ()
 showInfoMessage msg v = infoDialog (sessionWindow v) "Info" msg
 
-showErrorMessages :: [String] -> ViewUpdate ()
-showErrorMessages [] _ = return ()
-showErrorMessages msgs v = errorDialog (sessionWindow v) "Error" (intercalate "\n\n" msgs)
+showErrorMessage :: String -> View -> IO ()
+showErrorMessage msg v = errorDialog (sessionWindow v) "Error" msg
 
-showPlayers :: SessionState -> ViewUpdate ()
-showPlayers ss v = applyPlayerDeltas (playerList v) (playerMap $ players ss) 0 (sort $ playerDeltas $ players ss) 
+-- * helpers
+
+-- | a helper function to invoke action if user has pressed "OK" in dialog box
+-- or, in general, when IO action returned non-empty result
+whenOK :: IO (Maybe a) -> (a -> IO ()) -> IO ()
+whenOK ioResult action = do
+  result <- ioResult
+  maybe (return()) action result
+
+{- 
 
 -- ** Board drawing
 
