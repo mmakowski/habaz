@@ -96,16 +96,12 @@ viewConsumer' v q = return $ EventConsumer $ \e -> do
 
 processEvent :: Event -> EventQueueWriter -> View -> IO ()
 processEvent e q = case e of
-  LoginFailed msg     -> loginFailed msg q
   LoginSuccesful _    -> loginSuccesful
   PlayerRemoved n     -> playerRemoved n
   PlayerUpdated pi    -> playerUpdated pi
   ReadyOn             -> readyToggled True
   ReadyOff            -> readyToggled False
   _                   -> const $ return ()
-
-loginFailed :: String -> EventQueueWriter -> View -> IO ()
-loginFailed = error "TODO"
 
 loginSuccesful :: View -> IO ()
 loginSuccesful v = do
@@ -128,17 +124,57 @@ setCommandHandler :: Commanding a => a -> CommandHandler -> IO ()
 setCommandHandler c h = set c [ on command := h ]
 
 setCommandHandlers :: View -> EventQueueWriter -> IO ()
-setCommandHandlers (View w menu playerList) q = do
-  setCommandHandler (logInItem menu) $ logIn q w
-  setCommandHandler (readyItem menu) $ putEvent q $ ToggleReadyRequest
+setCommandHandlers v@(View w menu playerList) q = do
+  setCommandHandler (logInItem menu) $ logIn q v
+  setCommandHandler (readyItem menu) $ putEvent q ToggleReadyRequest
   setCommandHandler (exitItem menu)  $ close w
 
-logIn :: EventQueueWriter -> Frame () -> CommandHandler
-logIn q w = do
-  maybeUp <- promptForUsernameAndPassword w
+logIn :: EventQueueWriter -> View -> CommandHandler
+logIn q v = do
+  maybeUp <- promptForUsernameAndPassword $ sessionWindow v
   case maybeUp of
     Nothing -> return ()
-    Just (user, pass) -> putEvent q $ LoginRequest user pass
+    Just (user, pass) -> requestLogin q v user pass
+
+requestLogin :: EventQueueWriter -> View -> String -> String -> IO ()
+requestLogin q v user pass = do
+  putEvent q $ AddEventConsumer "loginResultConsumer" $ loginResultConsumer q v user pass
+  putEvent q $ LoginRequest user pass
+
+loginResultConsumer :: EventQueueWriter -> View -> String -> String -> EventConsumer
+loginResultConsumer q v user pass = EventConsumer $ \e -> case e of
+  LoginSuccesful _ -> terminate "loginResultConsumer"
+  LoginFailed msg  -> do 
+    promptForRegistration msg q v user pass
+    terminate "loginResultConsumer"
+  _                -> continue $ loginResultConsumer q v user pass
+
+promptForRegistration :: String -> EventQueueWriter -> View -> String -> String -> IO ()
+promptForRegistration msg q v user pass = do
+  register <- promptYesNo v $ "There has been an error when logging in: \"" ++ msg ++ "\". " ++
+                          "If you have not logged in for some time your account might have been removed. " ++
+                          "Would you like to try to register a new account using the credentials you provided?"
+  if register then requestRegistration q v user pass else return ()
+
+requestRegistration :: EventQueueWriter -> View -> String -> String -> IO ()
+requestRegistration q v user pass = do
+    putEvent q $ AddEventConsumer "registrationResultConsumer" $ registrationResultConsumer q v user pass
+    putEvent q $ RegistrationRequest user pass
+  
+registrationResultConsumer :: EventQueueWriter -> View -> String -> String -> EventConsumer
+registrationResultConsumer q v user pass = EventConsumer $ \e -> case e of
+  RegistrationSuccesful  -> do 
+    logInAfterRegistration q v user pass
+    terminate "registrationResultConsumer"
+  RegistrationFailed msg -> do
+    showInfoMessage v $ "Registration failed: \"" ++ msg ++ "\"."
+    terminate "registrationResultConsumer"
+  _                      -> continue $ registrationResultConsumer q v user pass
+
+logInAfterRegistration :: EventQueueWriter -> View -> String -> String -> CommandHandler
+logInAfterRegistration q v user pass = do
+  login <- promptYesNo v "Registration succesful! Would you like to log in using your new account?"
+  if login then requestLogin q v user pass else return ()
 
 promptForUsernameAndPassword :: Frame () -> IO (Maybe (String, String))
 promptForUsernameAndPassword w = do 
@@ -162,6 +198,11 @@ promptForUsernameAndPassword w = do
                   stop (Just (username, password)) ]
       set cancel [ on command := stop Nothing ]
 
+promptYesNo :: View -> String -> IO Bool
+promptYesNo v prompt = confirmDialog (sessionWindow v) "Confirm" prompt True
+
+showInfoMessage :: View -> String -> IO ()
+showInfoMessage v msg = infoDialog (sessionWindow v) "Info" msg
 
 {- 
 
@@ -175,9 +216,6 @@ showErrorMessages msgs v = errorDialog (sessionWindow v) "Error" (intercalate "\
 showPlayers :: SessionState -> ViewUpdate ()
 showPlayers ss v = applyPlayerDeltas (playerList v) (playerMap $ players ss) 0 (sort $ playerDeltas $ players ss) 
 
-promptYesNo :: String -> ViewUpdate Bool
-promptYesNo prompt v = confirmDialog (sessionWindow v) "Confirm" prompt True
-  
 -- ** Board drawing
 
 barWidthRatio = 0.08

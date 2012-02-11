@@ -13,7 +13,7 @@ import System.Log.Logger (debugM)
 
 import FIBSClient
 import DomainTypes
-import Events (putEvent, Event, EventQueueWriter, EventConsumer (..))
+import Events (putEvent, Event, EventQueueWriter, EventConsumer (..), continue)
 import qualified Events as E (Event (..))
 
 -- | a connector that handles login and register events
@@ -24,7 +24,7 @@ loginOrRegisterTransition :: EventQueueWriter -> Event -> IO (Maybe EventConsume
 loginOrRegisterTransition q e = case e of
   E.LoginRequest user pass        -> loginConnector q user pass
   E.RegistrationRequest user pass -> registrationConnector q user pass
-  _                               -> return $ Just $ fibsConnector q
+  _                               -> continue $ fibsConnector q
 
 -- | a connector that handles logging in
 loginConnector :: EventQueueWriter -> String -> String -> IO (Maybe EventConsumer)
@@ -34,7 +34,7 @@ loginConnector q user pass = do
   case loginStatus of
     LoginFailure msg -> do putEvent q $ E.LoginFailed msg
                            disconnect conn
-                           return $ Just $ fibsConnector q
+                           continue $ fibsConnector q
     LoginSuccess     -> startProcessingMessages q conn
 
 startProcessingMessages :: EventQueueWriter -> ReadWriteConnection -> IO (Maybe EventConsumer)
@@ -45,7 +45,7 @@ startProcessingMessages q rwconn = do
 
 -- | a connector that translates events to FIBS commands and sends them to the server
 commandSender :: EventQueueWriter -> WriteOnlyConnection -> IO (Maybe EventConsumer)
-commandSender q conn = return $ Just $ EventConsumer $ commandSendingTransition q conn
+commandSender q conn = continue $ EventConsumer $ commandSendingTransition q conn
 
 commandSendingTransition :: EventQueueWriter -> WriteOnlyConnection -> Event -> IO (Maybe EventConsumer)
 commandSendingTransition q conn e = do 
@@ -58,7 +58,12 @@ logAndSendCommand conn cmd = do
   sendCommand conn cmd
 
 registrationConnector :: EventQueueWriter -> String -> String -> IO (Maybe EventConsumer)
-registrationConnector q user pass = error "TODO"
+registrationConnector q user pass = do
+  status <- createAccount defaultFIBSHost defaultFIBSPort user pass
+  case status of
+    AccountCreationSuccess     -> putEvent q E.RegistrationSuccesful
+    AccountCreationFailure msg -> putEvent q $ E.RegistrationFailed msg
+  continue $ fibsConnector q
 
 messageProcessor :: EventQueueWriter -> [ParseResult FIBSMessage] -> IO ()
 messageProcessor q (msg:msgs) = do

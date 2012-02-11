@@ -41,6 +41,7 @@ test-suite all-tests
                   array == 0.3.*, 
                   base == 4.3.*, 
                   containers == 0.4.*, 
+                  hslogger == 1.1.*,
                   network == 2.3.*, 
                   HUnit == 1.2.*, 
                   old-locale == 1.0.*, 
