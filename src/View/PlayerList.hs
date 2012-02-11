@@ -40,20 +40,23 @@ selectedPlayer' pos ctl = do
 
 removePlayer :: ListCtrl () -> String -> IO ()
 removePlayer listCtrl name = do
-  pos <- findPlayerPos listCtrl name
-  itemCount <- listCtrlGetItemCount listCtrl
-  currentName <- listCtrlGetItemText listCtrl pos
+  (pos, currentName, itemCount) <- playerPosAttrs listCtrl name
   if pos < itemCount && currentName == name then listCtrlDeleteItem listCtrl pos else return False
   return ()
 
 updatePlayer :: ListCtrl () -> PlayerInfo -> IO ()
 updatePlayer listCtrl pinfo@(PlayerInfo name _ _ _) = do
-  pos <- findPlayerPos listCtrl name
-  itemCount <- listCtrlGetItemCount listCtrl
-  currentName <- listCtrlGetItemText listCtrl pos
+  (pos, currentName, itemCount) <- playerPosAttrs listCtrl name
   let action = if itemCount <= pos || currentName /= name then insertItem else updateItem 
   action listCtrl pos pinfo
   
+playerPosAttrs :: ListCtrl () -> String -> IO (Int, String, Int)
+playerPosAttrs ctl name = do
+  pos <- findPlayerPos ctl name
+  itemCount <- listCtrlGetItemCount ctl
+  currentName <- listCtrlGetItemText ctl pos
+  return (pos, currentName, itemCount)
+
 findPlayerPos :: ListCtrl () -> String -> IO Int
 findPlayerPos = findPlayerPos' 0
 
@@ -76,18 +79,18 @@ isValidPos listCtrl pos name = do
 type ItemAction = ListCtrl () -> Int -> PlayerInfo -> IO ()
 
 insertItem :: ItemAction
-insertItem listCtrl pos (PlayerInfo name rating exp inv) = do
-  listCtrlInsertItemWithData listCtrl pos name
-  listCtrlSetItem listCtrl pos 1 (show rating) 0
-  listCtrlSetItem listCtrl pos 2 (show exp) 0
-  listCtrlSetItem listCtrl pos 3 (showB inv) 0
-  return ()
+insertItem ctl pos (PlayerInfo name rating exp inv) = do
+  listCtrlInsertItemWithData ctl pos name
+  updateAttrs ctl pos rating exp inv
 
 updateItem :: ItemAction
-updateItem listCtrl pos (PlayerInfo _ rating exp inv) = do
-  listCtrlSetItem listCtrl pos 1 (show rating) 0
-  listCtrlSetItem listCtrl pos 2 (show exp) 0
-  listCtrlSetItem listCtrl pos 3 (showB inv) 0
+updateItem ctl pos (PlayerInfo _ rating exp inv) = updateAttrs ctl pos rating exp inv
+
+updateAttrs :: ListCtrl () -> Int -> Float -> Int -> Bool -> IO ()
+updateAttrs ctl pos rating exp inv = do
+  listCtrlSetItem ctl pos 1 (show rating) 0
+  listCtrlSetItem ctl pos 2 (show exp) 0
+  listCtrlSetItem ctl pos 3 (showB inv) 0
   return ()
 
 showB :: Bool -> String

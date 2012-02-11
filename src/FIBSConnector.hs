@@ -8,8 +8,10 @@ where
 import Control.Concurrent (forkIO)
 -- looping
 import Control.Monad (forM_)
+import Data.Maybe (isNothing)
 -- logging
 import System.Log.Logger (debugM)
+
 
 import FIBSClient
 import DomainTypes
@@ -91,6 +93,6 @@ eventsFor' ReadyOn            = [ E.ReadyOn ]
 eventsFor' ReadyOff           = [ E.ReadyOff ]
 eventsFor' (Welcome name _ _) = [ E.LoginSuccesful name ]
 eventsFor' (WhoInfo name opp _ ready _ rating exp _ _ _ _ _) =
-                                [ E.PlayerUpdated (PlayerInfo name rating exp (ready && (opp == Nothing))) ]
+                                [ E.PlayerUpdated (PlayerInfo name rating exp $ ready && isNothing opp) ]
 eventsFor' _                  = []
 

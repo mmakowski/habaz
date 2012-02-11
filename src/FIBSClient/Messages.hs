@@ -186,9 +186,9 @@ isSystem (System _) = True
 isSystem _ = False
 isReadyOn ReadyOn = True
 isReadyOn _ = False
-isOwnInfo (OwnInfo _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = True
+isOwnInfo OwnInfo {} = True
 isOwnInfo _ = False
-isWhoInfo (WhoInfo _ _ _ _ _ _ _ _ _ _ _ _) = True
+isWhoInfo WhoInfo {} = True
 isWhoInfo _ = False
 -- TODO: are the others needed? They have different type.
 isTerminating (ParseSuccess ConnectionTimeOut) = True

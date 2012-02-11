@@ -10,14 +10,16 @@ TODO: display invitation status
 module View ( viewConsumer ) 
 where
 -- WX
-import Graphics.UI.WX hiding (Event, Menu, menu, menuBar)
+import Graphics.UI.WX hiding (Event, Menu, menu, menuBar, when)
 import qualified Graphics.UI.WX as WX (Menu, menuBar)
+-- control structures
+import qualified Data.Traversable as DT (sequence)
+import Control.Monad (when)
 -- Model
 import Model
 import Backgammon
 import Events
 import DomainTypes 
-import qualified Data.Traversable as DT (sequence)
 -- other view modules
 import View.PlayerList
 -- player map
@@ -162,7 +164,7 @@ promptForRegistration msg q v user pass = do
   register <- promptYesNo v $ "There has been an error when logging in: \"" ++ msg ++ "\". " ++
                           "If you have not logged in for some time your account might have been removed. " ++
                           "Would you like to try to register a new account using the credentials you provided?"
-  if register then requestRegistration q v user pass else return ()
+  when register $ requestRegistration q v user pass
 
 requestRegistration :: EventQueueWriter -> View -> String -> String -> IO ()
 requestRegistration q v user pass = do
@@ -179,7 +181,7 @@ registrationResultConsumer q v user pass = EventConsumer $ \e -> case e of
 logInAfterRegistration :: EventQueueWriter -> View -> String -> String -> CommandHandler
 logInAfterRegistration q v user pass = do
   login <- promptYesNo v "Registration succesful! Would you like to log in using your new account?"
-  if login then requestLogin q v user pass else return ()
+  when login $ requestLogin q v user pass
 
 promptForUsernameAndPassword :: Frame () -> IO (Maybe (String, String))
 promptForUsernameAndPassword w = do 

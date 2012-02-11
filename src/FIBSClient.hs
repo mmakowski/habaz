@@ -157,10 +157,10 @@ login (RWConn h) clientname username password = do
   readUntil ["\n"] h
   line <- readUntil ["\n", "login:"] h
   return $ case fst (parseFIBSMessage line) of
-    ParseFailure msg             -> LoginFailure $ "parse error: " ++ msg
-    ParseSuccess LoginPrompt     -> LoginFailure "invalid login details"
-    ParseSuccess (Welcome _ _ _) -> LoginSuccess
-     
+    ParseFailure msg          -> LoginFailure $ "parse error: " ++ msg
+    ParseSuccess LoginPrompt  -> LoginFailure "invalid login details"
+    ParseSuccess (Welcome {}) -> LoginSuccess
+
 -- | Logs out from FIBS.
 logout :: Connection c
        => c            -- ^ a FIBS connection

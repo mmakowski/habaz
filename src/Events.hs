@@ -54,7 +54,7 @@ continue c = return $ Just c
 terminate :: String -> IO (Maybe EventConsumer)
 terminate name = do
   debugM "Habaź.consumer" $ "terminating consumer " ++ name
-  return $ Nothing
+  return Nothing
 
 -- | event queue is a transactional channel of Events
 type EventQueue = TChan Event
