@@ -56,8 +56,8 @@ createView q = do
         , layout := minsize (sz startWidth startHeight) $
           column 5 [ fill $ widget playerList ]
         ]
-  --TODO: this used to be essential (why?), but now everything seems to be working ok without it
-  --timer f [ interval := 100, on command := return () ]
+  -- required to enable processing of events while a modal dialog is displayed
+  timer f [ interval := 100, on command := return () ]
   let view = View f menuRepr playerList
   setHandlers view q
   return view
@@ -152,11 +152,10 @@ requestLogin q v user pass = do
 
 loginResultConsumer :: EventQueueWriter -> View -> String -> String -> EventConsumer
 loginResultConsumer q v user pass = EventConsumer $ \e -> case e of
-  LoginSuccesful _ -> terminate "loginResultConsumer"
-  LoginFailed msg  -> do 
-    promptForRegistration msg q v user pass
-    terminate "loginResultConsumer"
+  LoginSuccesful _ -> terminal $ return ()
+  LoginFailed msg  -> terminal $ promptForRegistration msg q v user pass
   _                -> continue $ loginResultConsumer q v user pass
+  where terminal op = do { op; terminate "loginResultConsumer" }
 
 promptForRegistration :: String -> EventQueueWriter -> View -> String -> String -> IO ()
 promptForRegistration msg q v user pass = do
@@ -172,13 +171,10 @@ requestRegistration q v user pass = do
   
 registrationResultConsumer :: EventQueueWriter -> View -> String -> String -> EventConsumer
 registrationResultConsumer q v user pass = EventConsumer $ \e -> case e of
-  RegistrationSuccesful  -> do 
-    logInAfterRegistration q v user pass
-    terminate "registrationResultConsumer"
-  RegistrationFailed msg -> do
-    showInfoMessage ("Registration failed: \"" ++ msg ++ "\".") v
-    terminate "registrationResultConsumer"
+  RegistrationSuccesful  -> terminal $ logInAfterRegistration q v user pass
+  RegistrationFailed msg -> terminal $ showErrorMessage ("Registration failed: \"" ++ msg ++ "\".") v
   _                      -> continue $ registrationResultConsumer q v user pass
+  where terminal op = do { op; terminate "registrationResultConsumer" }
 
 logInAfterRegistration :: EventQueueWriter -> View -> String -> String -> CommandHandler
 logInAfterRegistration q v user pass = do
