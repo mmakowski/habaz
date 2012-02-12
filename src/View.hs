@@ -94,6 +94,7 @@ viewConsumer' v q = return $ EventConsumer $ \e -> do
 processEvent :: Event -> EventQueueWriter -> View -> IO ()
 processEvent e q = case e of
   Error msg           -> showErrorMessage msg
+  Info msg            -> showInfoMessage msg
   LoginSuccesful _    -> loginSuccesful
   PlayerRemoved n     -> playerRemoved n
   PlayerUpdated pi    -> playerUpdated pi

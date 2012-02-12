@@ -14,7 +14,7 @@ import System.Log.Logger (debugM)
 
 
 import FIBSClient
-import DomainTypes
+import DomainTypes hiding (name)
 import Events (putEvent, Event, EventQueueWriter, EventConsumer (..), continue)
 import qualified Events as E (Event (..))
 
@@ -76,8 +76,9 @@ messageProcessor q (msg:msgs) = do
 -- translation between FIBS messages/commands and events
 
 commandsFor :: Event -> [FIBSCommand]
-commandsFor E.ToggleReadyRequest = [Toggle Ready]
-commandsFor _                    = []
+commandsFor E.ToggleReadyRequest  = [ Toggle Ready ]
+commandsFor (E.InviteRequest u l) = [ Invite u l ]
+commandsFor _                     = []
 
 eventsFor :: ParseResult FIBSMessage -> [Event]
 eventsFor (ParseSuccess msg) = eventsFor' msg
@@ -85,13 +86,12 @@ eventsFor (ParseFailure msg) = [E.Error msg]
 
 eventsFor' :: FIBSMessage -> [Event]
 eventsFor' (Logout name _)    = [ E.PlayerRemoved name ]
-eventsFor' (OwnInfo name _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ready _ _ _ _) = 
-                                [ E.LoginSuccesful name
-                                , if ready then E.ReadyOn else E.ReadyOff
+eventsFor' oi@(OwnInfo {})    = [ E.LoginSuccesful $ name oi
+                                , if (ready oi) then E.ReadyOn else E.ReadyOff
                                 ]
 eventsFor' ReadyOn            = [ E.ReadyOn ]
 eventsFor' ReadyOff           = [ E.ReadyOff ]
-eventsFor' (Welcome name _ _) = [ E.LoginSuccesful name ]
+eventsFor' (System msg)       = [ E.Info msg ]
 eventsFor' (WhoInfo name opp _ ready _ rating exp _ _ _ _ _) =
                                 [ E.PlayerUpdated (PlayerInfo name rating exp $ ready && isNothing opp) ]
 eventsFor' _                  = []

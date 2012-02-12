@@ -184,17 +184,17 @@ instance Arbitrary Flag where
   arbitrary = elements [Ready]
 
 instance Arbitrary FIBSCommand where
-  arbitrary = toggles
-    where 
-      toggles = 
-        do f <- arbitrary 
-           return (Toggle f)
+  arbitrary = oneof [ liftM Toggle arbitrary
+                    , liftM2 Invite arbitrary arbitrary
+                    ]
+
 
 commandFormatting = testGroup "FIBS command formatting" [
-  testProperty "formatted toggle is 'toggle <flag>'" formatCommandToggleFlag
+  testProperty "formatted command is as expected" formattedCommandAsExpected
   ]
   where
-    formatCommandToggleFlag cmd@(Toggle flag) = "toggle " ++ (map toLower . show) flag == formatCommand cmd
+    formattedCommandAsExpected cmd@(Toggle flag) = "toggle " ++ (map toLower . show) flag == formatCommand cmd
+    formattedCommandAsExpected cmd@(Invite user len) = "invite " ++ user ++ " " ++ len == formatCommand cmd
 
 
 -- tests
