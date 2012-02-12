@@ -10,16 +10,8 @@ import Graphics.UI.WXCore
 
 import DomainTypes
 
-{-
--- Player map
-import qualified Data.Map as Map
--- Model
-import Model
--- misc
-import Data.Maybe (fromMaybe)
--}
-createPlayerList :: Frame () -> IO (ListCtrl ())
-createPlayerList f = listCtrl f [ columns := [ ("Name", AlignLeft, 120)
+createPlayerList :: Window a -> IO (ListCtrl ())
+createPlayerList p = listCtrl p [ columns := [ ("Name", AlignLeft, 120)
                                              , ("Rating", AlignLeft, 70)
                                              , ("Experience", AlignLeft, 70)
                                              , ("Invitable", AlignLeft, 50)

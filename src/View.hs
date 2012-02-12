@@ -30,6 +30,7 @@ import qualified Data.Map as Map
 data View = View { sessionWindow :: Frame ()
                  , sessionMenu :: SessionMenu
                  , playerList :: ListCtrl ()
+                 , invitationList :: ListCtrl ()
                  }
 
 -- | Menu items which need to be accessed by Controller.
@@ -52,15 +53,25 @@ startHeight = 300
 createView :: EventQueueWriter -> IO View
 createView q = do
   f <- frame [ text := "Habaź" ]
+  p <- panel f []
   (menuBar, menuRepr) <- createMenuBar
-  playerList <- createPlayerList f
+  s <- splitterWindow p []
+  playerList <- createPlayerList s
+  -- TODO: move to separate module
+  invitationList <- listCtrl s [ columns := [ ("Name", AlignLeft, 120)
+                                            , ("Rating", AlignLeft, 70)
+                                            , ("Experience", AlignLeft, 70)
+                                            , ("Match Length", AlignLeft, 100)
+                                            ]
+                               ]
   set f [ WX.menuBar := menuBar
-        , layout := minsize (sz startWidth startHeight) $
-          column 5 [ fill $ widget playerList ]
+        , layout := minsize (sz startWidth startHeight) $ container p $
+                    fill $ hsplit s 5 200 (widget playerList)
+                                          (widget invitationList)
         ]
   -- required to enable processing of events while a modal dialog is displayed
   timer f [ interval := 100, on command := return () ]
-  let view = View f menuRepr playerList
+  let view = View f menuRepr playerList invitationList
   setHandlers view q
   return view
  
@@ -120,7 +131,7 @@ readyToggled b v = set (readyItem $ sessionMenu v) [ checked := b ]
 -- * handlers
 
 setHandlers :: View -> EventQueueWriter -> IO ()
-setHandlers v@(View w menu playerList) q = do
+setHandlers v@(View w menu playerList invitationList) q = do
   setCommandHandler (logInItem menu) $ logIn q v
   setCommandHandler (readyItem menu) $ putEvent q ToggleReadyRequest
   setCommandHandler (exitItem menu)  $ close w
