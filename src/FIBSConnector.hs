@@ -7,7 +7,7 @@ where
 -- FIBS message processing thread" 
 import Control.Concurrent (forkIO)
 -- looping
-import Control.Monad (forM_)
+import Control.Monad (forM_, when)
 import Data.Maybe (isNothing)
 -- logging
 import System.Log.Logger (debugM)
@@ -15,7 +15,7 @@ import System.Log.Logger (debugM)
 
 import FIBSClient
 import DomainTypes hiding (name)
-import Events (putEvent, Event, EventQueueWriter, EventConsumer (..), continue)
+import Events (putEvent, Event, EventQueueWriter, EventConsumer (..), continue, terminate)
 import qualified Events as E (Event (..))
 
 -- | a connector that handles login and register events
@@ -43,7 +43,7 @@ startProcessingMessages :: EventQueueWriter -> ReadWriteConnection -> IO (Maybe 
 startProcessingMessages q rwconn = do
   (msgs, woconn) <- readMessages rwconn
   forkIO $ messageProcessor q msgs
-  commandSender q woconn
+  commandSender q woconn 
 
 -- | a connector that translates events to FIBS commands and sends them to the server
 commandSender :: EventQueueWriter -> WriteOnlyConnection -> IO (Maybe EventConsumer)
@@ -52,7 +52,7 @@ commandSender q conn = continue $ EventConsumer $ commandSendingTransition q con
 commandSendingTransition :: EventQueueWriter -> WriteOnlyConnection -> Event -> IO (Maybe EventConsumer)
 commandSendingTransition q conn e = do 
   forM_ (commandsFor e) $ logAndSendCommand conn
-  commandSender q conn
+  if e == E.Disconnected then continue $ fibsConnector q else commandSender q conn
 
 logAndSendCommand :: WriteOnlyConnection -> FIBSCommand -> IO ()
 logAndSendCommand conn cmd = do
@@ -71,7 +71,15 @@ messageProcessor :: EventQueueWriter -> [ParseResult FIBSMessage] -> IO ()
 messageProcessor q (msg:msgs) = do
   debugM "FIBS.message" (show msg)
   forM_ (eventsFor msg) $ putEvent q
-  messageProcessor q msgs
+  when (not $ isTerminal msg) $ messageProcessor q msgs
+messageProcessor q [] = do
+  debugM "FIBS" "message stream exhausted"
+  return ()
+
+
+isTerminal :: ParseResult FIBSMessage -> Bool
+isTerminal (ParseSuccess ConnectionTimeOut) = True
+isTerminal _                                = False
 
 -- translation between FIBS messages/commands and events
 
@@ -85,9 +93,10 @@ eventsFor (ParseSuccess msg) = eventsFor' msg
 eventsFor (ParseFailure msg) = [E.Error msg]
 
 eventsFor' :: FIBSMessage -> [Event]
+eventsFor' ConnectionTimeOut  = [ E.Disconnected ]
 eventsFor' (Logout name _)    = [ E.PlayerRemoved name ]
 eventsFor' oi@(OwnInfo {})    = [ E.LoginSuccesful $ name oi
-                                , if (ready oi) then E.ReadyOn else E.ReadyOff
+                                , if ready oi then E.ReadyOn else E.ReadyOff
                                 ]
 eventsFor' ReadyOn            = [ E.ReadyOn ]
 eventsFor' ReadyOff           = [ E.ReadyOff ]

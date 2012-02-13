@@ -70,7 +70,8 @@ createView q = do
                                           (widget invitationList)
         ]
   -- required to enable processing of events while a modal dialog is displayed
-  timer f [ interval := 100, on command := return () ]
+  -- the interval determines the delay in processing events, but also the lower it is, the higher the CPU usage.
+  timer f [ interval := 10, on command := return () ]
   let view = View f menuRepr playerList invitationList
   setHandlers view q
   return view
@@ -104,6 +105,7 @@ viewConsumer' v q = return $ EventConsumer $ \e -> do
 
 processEvent :: Event -> EventQueueWriter -> View -> IO ()
 processEvent e q = case e of
+  Disconnected        -> disconnected
   Error msg           -> showErrorMessage msg
   Info msg            -> showInfoMessage msg
   LoginSuccesful _    -> loginSuccesful
@@ -113,11 +115,11 @@ processEvent e q = case e of
   ReadyOff            -> readyToggled False
   _                   -> const $ return ()
 
+disconnected :: View -> IO ()
+disconnected v = loginRelatedControlsEnabled v True
+
 loginSuccesful :: View -> IO ()
-loginSuccesful v = do
-  set (logInItem  $ sessionMenu v) [ enabled := False ]
-  set (logOutItem $ sessionMenu v) [ enabled := True  ]
-  set (readyItem  $ sessionMenu v) [ enabled := True  ]
+loginSuccesful v = loginRelatedControlsEnabled v False
 
 playerRemoved :: String -> View -> IO ()
 playerRemoved name v = removePlayer (playerList v) name
@@ -127,6 +129,12 @@ playerUpdated pinfo v = updatePlayer (playerList v) pinfo
 
 readyToggled :: Bool -> View -> IO ()
 readyToggled b v = set (readyItem $ sessionMenu v) [ checked := b ]
+
+loginRelatedControlsEnabled :: View -> Bool -> IO ()
+loginRelatedControlsEnabled v b = do
+  set (logInItem  $ sessionMenu v) [ enabled := b     ]
+  set (logOutItem $ sessionMenu v) [ enabled := not b ]
+  set (readyItem  $ sessionMenu v) [ enabled := not b ]
 
 -- * handlers
 
