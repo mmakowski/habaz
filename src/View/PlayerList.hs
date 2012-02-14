@@ -50,23 +50,20 @@ playerPosAttrs ctl name = do
   return (pos, currentName, itemCount)
 
 findPlayerPos :: ListCtrl () -> String -> IO Int
-findPlayerPos = findPlayerPos' 0
+findPlayerPos ctl name = do
+  itemCount <- listCtrlGetItemCount ctl
+  findPlayerPos' ctl 0 itemCount name
 
-findPlayerPos' :: Int -> ListCtrl () -> String -> IO Int
-findPlayerPos' pos listCtrl name = do
-  validPos <- isValidPos listCtrl pos name
-  if not validPos then findPlayerPos' (pos + 1) listCtrl name else return pos
-
-isValidPos :: ListCtrl () -> Int -> String -> IO Bool
-isValidPos listCtrl pos name = do
-  itemCount <- listCtrlGetItemCount listCtrl
-  let isAtEnd = pos == itemCount
-  currentText <- listCtrlGetItemText listCtrl pos
-  let currentItemMatches = currentText == name
-  let currentIsLarger = currentText > name
-  prevText <- listCtrlGetItemText listCtrl (pos - 1)
-  let prevIsSmaller = pos == 0 || prevText < name
-  return $ isAtEnd || currentItemMatches || currentIsLarger && prevIsSmaller
+findPlayerPos' :: ListCtrl () -> Int -> Int -> String -> IO Int
+findPlayerPos' ctl lower upper name
+  | lower == upper = return lower
+  | otherwise      = do
+    let pos = (lower + upper) `div` 2
+    text <- listCtrlGetItemText ctl pos
+    case name `compare` text of 
+      EQ -> return pos
+      LT -> findPlayerPos' ctl lower pos name
+      GT -> if pos == upper - 1 then return upper else findPlayerPos' ctl pos upper name
 
 type ItemAction = ListCtrl () -> Int -> PlayerInfo -> IO ()
 
