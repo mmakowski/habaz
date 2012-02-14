@@ -3,7 +3,7 @@ dist/
 *.log
 *.o
 *~
-
+*.prof
 /.dist-scion
 /.dist-buildwrapper
 *.sublime-project
