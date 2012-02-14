@@ -9,23 +9,24 @@ import Graphics.UI.WX (start)
 import Control.Concurrent (forkIO) 
 
 -- logging
-import System.IO (openFile, IOMode (..))
+import System.Log.Formatter (simpleLogFormatter)
+import System.Log.Handler (setFormatter)
+import System.Log.Handler.Simple (fileHandler)
 import System.Log.Logger
-import System.Log.Handler.Simple (verboseStreamHandler)
 
 main :: IO ()
 main = start $ do
   setUpLogging
   (qreader, qwriter) <- newEventQueue
   consumers <- sequence [ viewConsumer qwriter
-  						, return $ fibsConnector qwriter
+                        , return $ fibsConnector qwriter
                         ]
   forkIO $ dispatchEvents consumers qreader
 
 setUpLogging :: IO ()
 setUpLogging = do
-  logFile <- openFile "habaz.log" AppendMode
-  logFileHandler <- verboseStreamHandler logFile DEBUG
+  logFileHandler <- fileHandler "habaz.log" DEBUG >>= \lh -> return $
+                 setFormatter lh (simpleLogFormatter "$time $loggername [$tid] $prio $msg")
   updateGlobalLogger rootLoggerName $ setHandlers [logFileHandler]
   updateGlobalLogger rootLoggerName (setLevel DEBUG)
   noticeM "Habaź" "Habaź starting"
