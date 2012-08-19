@@ -8,7 +8,7 @@ c i = return $ IntConsumer $ \j -> do
 s :: String -> IO IntConsumer
 s str = return $ IntConsumer $ \i -> do
   print str
-  s (str ++ (show i))
+  s (str ++ show i)
 
 go c i = do
   (IntConsumer c1) <- c i

@@ -7,7 +7,7 @@ where
 -- FIBS message processing thread" 
 import Control.Concurrent (forkIO)
 -- looping
-import Control.Monad (forM_, when)
+import Control.Monad (forM_, unless)
 import Data.Maybe (isNothing)
 -- logging
 import System.Log.Logger (debugM)
@@ -71,7 +71,7 @@ messageProcessor :: EventQueueWriter -> [ParseResult FIBSMessage] -> IO ()
 messageProcessor q (msg:msgs) = do
   debugM "FIBS.message" (show msg)
   forM_ (eventsFor msg) $ putEvent q
-  when (not $ isTerminal msg) $ messageProcessor q msgs
+  unless (isTerminal msg) $ messageProcessor q msgs
 messageProcessor q [] = do
   debugM "FIBS" "message stream exhausted"
   return ()
