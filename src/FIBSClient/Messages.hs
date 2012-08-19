@@ -27,6 +27,7 @@ module FIBSClient.Messages(
 
 import Control.Applicative
 import Data.List
+import Data.Maybe (catMaybes)
 import Data.Time
 import System.Locale
 import Text.Regex.TDFA ((=~))
@@ -37,7 +38,7 @@ data RedoubleLimit
      deriving (Eq, Show)
 
 data MatchLength
-     = NoOfRounds Int
+     = NoOfPoints Int
      | UnlimitedMatchLength
      deriving (Eq, Show)
 
@@ -238,20 +239,37 @@ parseUnprefixedLine ('*':('*':(' ':msg))) rest = (ParseSuccess (recognise msg), 
     recognise msg = System msg
 -- empty line
 parseUnprefixedLine "" rest = skip "" rest
--- free form
+-- other unprefixed lines
 parseUnprefixedLine line rest = 
-  case line =~ "(.+) wants to play a (.+) point match with you\\." :: (String, String, String, [String]) of
-    (_, _, _, (name:length:[])) -> (Invitation <$> pure name <*> (NoOfRounds <$> parse length), rest)
-    _                           -> parseUnprefixedLine' line rest
+  case catMaybes $ map (applyRegexParsingRule line) unprefixedLineRules of
+    (h:_) -> (h, rest)
+    []    -> parseUnprefixedLine' line rest
 
 parseUnprefixedLine' line rest = (ParseSuccess (recognise line), rest)
   where
     recognise "Connection timed out." = ConnectionTimeOut
     recognise "                      Keep them coming...." = EndOfGoodbyeMessage
-    recognise line = 
-      case line =~ "(.+) wants to play a (.+) point match with you\\." :: (String, String, String, [String]) of
-        (_, _, _, (name:length:[])) -> FreeForm name
-        _                           -> FreeForm line
+    recognise line = FreeForm line
+
+type RegexParsingRule = (String, [String] -> Maybe (ParseResult FIBSMessage))
+
+applyRegexParsingRule :: String -> RegexParsingRule -> Maybe (ParseResult FIBSMessage)
+applyRegexParsingRule line rule@(pattern, parse) = case line =~ pattern :: (String, String, String, [String]) of
+  (_, _, _, [])       -> Nothing
+  (_, _, _, groups@_) -> parse groups
+
+unprefixedLineRules :: [RegexParsingRule]
+unprefixedLineRules = [ ("(.+) wants to play a (.+) point match with you\\.", parseLimitedMatchInvitation)
+                      , ("(.+) wants to play an unlimited match with you\\.", parseUnlimitedMatchInvitation)
+                      ]
+
+parseLimitedMatchInvitation :: [String] -> Maybe (ParseResult FIBSMessage)
+parseLimitedMatchInvitation (name:len:[]) = Just $ Invitation <$> pure name <*> (NoOfPoints <$> parse len)
+parseLimitedMatchInvitation _ = Nothing
+
+parseUnlimitedMatchInvitation :: [String] -> Maybe (ParseResult FIBSMessage)
+parseUnlimitedMatchInvitation (name:[]) = Just $ ParseSuccess $ Invitation name UnlimitedMatchLength
+parseUnlimitedMatchInvitation _ = Nothing
 
 skip _ = parseFIBSMessage
 
