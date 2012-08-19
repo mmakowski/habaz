@@ -6,6 +6,7 @@ changes to make it more practical to represent the stream of messages as a list.
 module FIBSClient.Messages( 
   -- * Types
   FIBSMessage(..),
+  MatchLength(..),
   ParseResult(..),
   RedoubleLimit (..),
   -- * Functions
@@ -23,19 +24,28 @@ module FIBSClient.Messages(
   splitByFirst,
   splitByFirstWithLimit
 ) where
+
 import Control.Applicative
 import Data.List
 import Data.Time
 import System.Locale
+import Text.Regex.TDFA ((=~))
 
 data RedoubleLimit
      = LimitedTo Int
      | Unlimited
      deriving (Eq, Show)
 
+data MatchLength
+     = NoOfRounds Int
+     | UnlimitedMatchLength
+     deriving (Eq, Show)
+
 data FIBSMessage 
      = LoginPrompt
      | FreeForm String
+     | Invitation { name :: String
+                  , matchLength :: MatchLength }
        -- | System messages are ones prefixed with two asterisks, except for special cases which are
        -- interpreted further, like 'ReadyOn' etc.
      | System { message :: String }
@@ -229,11 +239,19 @@ parseUnprefixedLine ('*':('*':(' ':msg))) rest = (ParseSuccess (recognise msg), 
 -- empty line
 parseUnprefixedLine "" rest = skip "" rest
 -- free form
-parseUnprefixedLine line rest = (ParseSuccess (recognise line), rest)
+parseUnprefixedLine line rest = 
+  case line =~ "(.+) wants to play a (.+) point match with you\\." :: (String, String, String, [String]) of
+    (_, _, _, (name:length:[])) -> (Invitation <$> pure name <*> (NoOfRounds <$> parse length), rest)
+    _                           -> parseUnprefixedLine' line rest
+
+parseUnprefixedLine' line rest = (ParseSuccess (recognise line), rest)
   where
     recognise "Connection timed out." = ConnectionTimeOut
     recognise "                      Keep them coming...." = EndOfGoodbyeMessage
-    recognise line = FreeForm line
+    recognise line = 
+      case line =~ "(.+) wants to play a (.+) point match with you\\." :: (String, String, String, [String]) of
+        (_, _, _, (name:length:[])) -> FreeForm name
+        _                           -> FreeForm line
 
 skip _ = parseFIBSMessage
 

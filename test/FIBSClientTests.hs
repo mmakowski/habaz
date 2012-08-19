@@ -84,7 +84,9 @@ individualMessageTypesParsing = testGroup "FIBS message parsing of individual me
   testCase "ready on" ("** You're now ready to invite or join someone.\r\n" `parsesTo` ReadyOn),
   
   testCase "ready off" ("** You're now refusing to play with someone.\r\n" `parsesTo` ReadyOff),
-  
+
+  testCase "invitation (limited)" ("habaztest_a wants to play a 21 point match with you.\r\n" `parsesTo` Invitation "habaztest_a" (NoOfRounds 21)),
+
   testCase "blank line before system message is skipped" 
     ("\r\n** system message" `parsesTo` System "system message"),
 
