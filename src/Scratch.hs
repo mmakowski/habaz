@@ -92,7 +92,7 @@ viewConsumerIO q = do
   f <- frame [ text := "Habaź" ]
   -- required to enable processing of events while a modal dialog is displayed
   -- the interval determines the delay in processing events, but also the lower it is, the higher the CPU usage.
-  timer f [ interval := 100, on command := return () ]
+  timer f [ interval := 10, on command := return () ]
   return $ viewConsumer q
 
 viewConsumer :: EventQueueWriter -> EventConsumer

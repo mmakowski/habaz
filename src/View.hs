@@ -71,7 +71,7 @@ createView q = do
         ]
   -- required to enable processing of events while a modal dialog is displayed
   -- the interval determines the delay in processing events, but also the lower it is, the higher the CPU usage.
-  timer f [ interval := 10, on command := return () ]
+  timer f [ interval := 1, on command := return () ]
   let view = View f menuRepr playerList invitationList
   setHandlers view q
   return view
