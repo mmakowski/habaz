@@ -12,6 +12,9 @@ import System.Log.Handler (setFormatter)
 import System.Log.Handler.Simple (fileHandler)
 import System.Log.Logger
 
+import Graphics.UI.WX hiding (Event)
+
+
 -- DomainTypes ----------------------------------------------------------------------
 
 data PlayerInfo = PlayerInfo { name :: String
@@ -85,7 +88,12 @@ modifyConsumers _ ecs = return ecs
 -- View ----------------------------------------------------------------------------
 
 viewConsumerIO :: EventQueueWriter -> IO EventConsumer
-viewConsumerIO q = return $ viewConsumer q
+viewConsumerIO q = do
+  f <- frame [ text := "Habaź" ]
+  -- required to enable processing of events while a modal dialog is displayed
+  -- the interval determines the delay in processing events, but also the lower it is, the higher the CPU usage.
+  timer f [ interval := 100, on command := return () ]
+  return $ viewConsumer q
 
 viewConsumer :: EventQueueWriter -> EventConsumer
 viewConsumer q = EventConsumer $ \e -> do
@@ -108,7 +116,7 @@ messageGenerator q = forM_ [1..1000] $ \i -> do
 -- Main ----------------------------------------------------------------------------
 
 main :: IO ()
-main = do
+main = start $ do
   setUpLogging
   (qreader, qwriter) <- newEventQueue
   consumers <- sequence [ viewConsumerIO qwriter
