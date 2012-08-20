@@ -12,22 +12,17 @@ import System.Log.Handler (setFormatter)
 import System.Log.Handler.Simple (fileHandler)
 import System.Log.Logger
 
-import Graphics.UI.WX hiding (Event)
+
+-- wx
+--import Graphics.UI.WX hiding (Event)
 
 
--- DomainTypes ----------------------------------------------------------------------
-
-data PlayerInfo = PlayerInfo { name :: String
-                             , rating :: Float
-                             , experience :: Int
-                             , canBeInvited :: Bool
-                             }
-  deriving (Show, Eq)
+-- gtk
+import Graphics.UI.Gtk
 
 -- Events ---------------------------------------------------------------------------
 
-data Event = AddEventConsumer String EventConsumer
-           | Test Int
+data Event = Test Int
   deriving (Eq, Show)
 
 
@@ -74,31 +69,42 @@ dispatchEvents :: [EventConsumer] -> EventQueueReader -> IO ()
 dispatchEvents ecs q = do
   e <- getEvent q
   debugM "event" (show e)
-  ecs' <- modifyConsumers e ecs
-  ecs'' <- mapM (consume e) ecs'
-  dispatchEvents (catMaybes ecs'') q
-
--- | applies events that modify consumers to the existing list of consumers
-modifyConsumers :: Event -> [EventConsumer] -> IO [EventConsumer]
-modifyConsumers (AddEventConsumer name ec) ecs = do
-  debugM "consumer" $ "adding consumer " ++ name
-  return $ ecs ++ [ec]
-modifyConsumers _ ecs = return ecs
+  ecs' <- mapM (consume e) ecs
+  dispatchEvents (catMaybes ecs') q
 
 -- View ----------------------------------------------------------------------------
-
-viewConsumerIO :: EventQueueWriter -> IO EventConsumer
-viewConsumerIO q = do
-  f <- frame [ text := "Habaź" ]
-  -- required to enable processing of events while a modal dialog is displayed
-  -- the interval determines the delay in processing events, but also the lower it is, the higher the CPU usage.
-  timer f [ interval := 10, on command := return () ]
-  return $ viewConsumer q
 
 viewConsumer :: EventQueueWriter -> EventConsumer
 viewConsumer q = EventConsumer $ \e -> do
   debugM "view" (show e)
   continue $ viewConsumer q
+
+-- wx
+--withView :: ((EventQueueWriter -> IO EventConsumer) -> IO a) -> IO ()
+--withView prog = start $ prog viewConsumerIO
+
+--viewConsumerIO q = do
+--  f <- frame [ text := "Habaź" ]
+--  -- required to enable processing of events while a modal dialog is displayed
+--  -- the interval determines the delay in processing events, but also the lower it is, the higher the CPU usage.
+--  timer f [ interval := 10, on command := return () ]
+--  return $ viewConsumer q
+
+-- gtk
+
+withView :: ((EventQueueWriter -> IO EventConsumer) -> IO a) -> IO ()
+withView prog = do
+  initGUI
+  prog viewConsumerIO
+  mainGUI
+
+viewConsumerIO :: EventQueueWriter -> IO EventConsumer
+viewConsumerIO q = do
+  f <- windowNew
+  onDestroy f mainQuit
+  widgetShowAll f
+  return $ viewConsumer q
+
 
 -- FibsConnector -------------------------------------------------------------------
 
@@ -116,14 +122,13 @@ messageGenerator q = forM_ [1..1000] $ \i -> do
 -- Main ----------------------------------------------------------------------------
 
 main :: IO ()
-main = start $ do
+main = withView $ \viewConsumerIO -> do
   setUpLogging
   (qreader, qwriter) <- newEventQueue
   consumers <- sequence [ viewConsumerIO qwriter
                         , fibsConnector qwriter
                         ]
   forkIO $ dispatchEvents consumers qreader
-  return ()
 
 setUpLogging :: IO ()
 setUpLogging = do
