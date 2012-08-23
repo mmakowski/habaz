@@ -32,8 +32,9 @@ executable habaz
                   FIBSConnector,
                   Model,
                   View,
-                  View.PlayerList
-  ghc-options:    -rtsopts -O2
+                  View.PlayerList,
+                  Graphics.UI.WX.Async
+  ghc-options:    -rtsopts -threaded -O2
 
 test-suite all-tests
   type:           exitcode-stdio-1.0

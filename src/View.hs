@@ -12,6 +12,7 @@ where
 -- WX
 import Graphics.UI.WX hiding (Event, Menu, menu, menuBar, when)
 import qualified Graphics.UI.WX as WX (Menu, menuBar)
+import Graphics.UI.WX.Async
 -- control structures
 import qualified Data.Traversable as DT (sequence)
 import Control.Monad (when)
@@ -27,7 +28,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 -- | All view elements that need to be acessed by Controller.
-data View = View { sessionWindow :: Frame ()
+data View = View { updateQueue :: UpdateQueue
+                 , sessionWindow :: Frame ()
                  , sessionMenu :: SessionMenu
                  , playerList :: ListCtrl ()
                  , invitationList :: ListCtrl ()
@@ -69,10 +71,8 @@ createView q = do
                     fill $ hsplit s 5 200 (widget playerList)
                                           (widget invitationList)
         ]
-  -- required to enable processing of events while a modal dialog is displayed
-  -- the interval determines the delay in processing events, but also the lower it is, the higher the CPU usage.
-  timer f [ interval := 1, on command := return () ]
-  let view = View f menuRepr playerList invitationList
+  updateQueue <- mkUpdateQueue f
+  let view = View updateQueue f menuRepr playerList invitationList
   setHandlers view q
   return view
  
@@ -100,7 +100,7 @@ createMenuBar = do
 
 viewConsumer' :: View -> EventQueueWriter -> IO EventConsumer
 viewConsumer' v q = return $ EventConsumer $ \e -> do
-  processEvent e q v
+  postGUIAsync (updateQueue v) $ processEvent e q v
   DT.sequence $ Just $ viewConsumer' v q
 
 processEvent :: Event -> EventQueueWriter -> View -> IO ()
@@ -139,7 +139,7 @@ loginRelatedControlsEnabled v b = do
 -- * handlers
 
 setHandlers :: View -> EventQueueWriter -> IO ()
-setHandlers v@(View w menu playerList invitationList) q = do
+setHandlers v@(View _ w menu playerList invitationList) q = do
   setCommandHandler (logInItem menu) $ logIn q v
   setCommandHandler (readyItem menu) $ putEvent q ToggleReadyRequest
   setCommandHandler (exitItem menu)  $ close w
@@ -272,6 +272,7 @@ whenOK :: IO (Maybe a) -> (a -> IO ()) -> IO ()
 whenOK ioResult action = do
   result <- ioResult
   maybe (return()) action result
+
 
 {- 
 
