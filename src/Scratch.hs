@@ -1,10 +1,12 @@
 import Data.Maybe (catMaybes)
 
 -- TChan for event queue
-import Control.Concurrent.STM (atomically) 
+import Control.Concurrent.STM (atomically, STM) 
+import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, tryReadTQueue, writeTQueue)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, writeTChan, readTChan)
 import Control.Concurrent (forkIO) 
-import Control.Monad (forM_)
+import Control.Monad (forever, forM, forM_, when)
+import Data.Maybe (catMaybes)
 
 -- logging
 import System.Log.Formatter (simpleLogFormatter)
@@ -14,11 +16,44 @@ import System.Log.Logger
 
 
 -- wx
---import Graphics.UI.WX hiding (Event)
+import Graphics.UI.WX hiding (Event)
 
 
 -- gtk
-import Graphics.UI.Gtk
+--import Graphics.UI.Gtk
+
+-- Graphics.UI.WX.Async
+
+type UpdateQueue = TQueue (IO ())
+
+data AsyncConfig = AsyncConfig { pollIntervalMs :: Int
+                               , batchSize      :: Int
+                               }
+
+defaultConfig :: AsyncConfig
+defaultConfig = AsyncConfig { pollIntervalMs = 10
+                            , batchSize      = 100
+                            }
+
+mkUpdateQueue :: Frame a -> IO UpdateQueue
+mkUpdateQueue = mkUpdateQueueWithConfig defaultConfig
+
+mkUpdateQueueWithConfig :: AsyncConfig -> Frame a -> IO UpdateQueue
+mkUpdateQueueWithConfig cfg f = do
+  q <- newTQueueIO
+  timer f [ interval   := pollIntervalMs cfg
+          , on command := processUiUpdates (batchSize cfg) q
+          ]
+  return q
+
+processUiUpdates :: Int -> UpdateQueue -> IO ()
+processUiUpdates n q = atomically (tryTake n q) >>= sequence_
+
+tryTake :: Int -> TQueue a -> STM [a]
+tryTake n q = forM [1..n] (\_ -> tryReadTQueue q) >>= return . catMaybes
+
+postGUIAsync :: UpdateQueue -> IO a -> IO ()
+postGUIAsync q u = atomically $ writeTQueue q $ do u; return ()
 
 -- Events ---------------------------------------------------------------------------
 
@@ -80,30 +115,28 @@ viewConsumer q = EventConsumer $ \e -> do
   continue $ viewConsumer q
 
 -- wx
---withView :: ((EventQueueWriter -> IO EventConsumer) -> IO a) -> IO ()
---withView prog = start $ prog viewConsumerIO
+withView :: ((EventQueueWriter -> IO EventConsumer) -> IO a) -> IO ()
+withView prog = start $ prog viewConsumerIO
 
---viewConsumerIO q = do
---  f <- frame [ text := "Habaź" ]
---  -- required to enable processing of events while a modal dialog is displayed
---  -- the interval determines the delay in processing events, but also the lower it is, the higher the CPU usage.
---  timer f [ interval := 10, on command := return () ]
---  return $ viewConsumer q
+viewConsumerIO q = do
+  f <- frame [ text := "Scratch" ]
+  mkUpdateQueue f
+  return $ viewConsumer q
 
 -- gtk
 
-withView :: ((EventQueueWriter -> IO EventConsumer) -> IO a) -> IO ()
-withView prog = do
-  initGUI
-  prog viewConsumerIO
-  mainGUI
+--withView :: ((EventQueueWriter -> IO EventConsumer) -> IO a) -> IO ()
+--withView prog = do
+--  initGUI
+--  prog viewConsumerIO
+--  mainGUI
 
-viewConsumerIO :: EventQueueWriter -> IO EventConsumer
-viewConsumerIO q = do
-  f <- windowNew
-  onDestroy f mainQuit
-  widgetShowAll f
-  return $ viewConsumer q
+--viewConsumerIO :: EventQueueWriter -> IO EventConsumer
+--viewConsumerIO q = do
+--  f <- windowNew
+--  onDestroy f mainQuit
+--  widgetShowAll f
+--  return $ viewConsumer q
 
 
 -- FibsConnector -------------------------------------------------------------------
@@ -114,7 +147,7 @@ fibsConnector q = do
   return $ EventConsumer $ \_ -> terminate "FIBS connector"
 
 messageGenerator :: EventQueueWriter -> IO ()
-messageGenerator q = forM_ [1..1000] $ \i -> do
+messageGenerator q = forM_ [1..10000] $ \i -> do
   let e = Test i
   debugM "gen" (show e)
   putEvent q e
