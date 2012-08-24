@@ -38,7 +38,7 @@ module Graphics.UI.WX.Async
 import Control.Concurrent.STM (atomically, STM) 
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, isEmptyTChan, readTChan, writeTChan)
 
-import Control.Monad (forM, forM_)
+import Control.Monad (forM, forM_, liftM)
 
 import Data.Maybe (catMaybes)
 
@@ -84,10 +84,10 @@ processUiUpdates :: Int -> UpdateQueue -> IO ()
 processUiUpdates n q = atomically (tryTake n q) >>= sequence_
 
 tryTake :: Int -> TChan a -> STM [a]
-tryTake n q = forM [1..n] (\_ -> tryReadTChan q) >>= return . catMaybes
+tryTake n q = liftM catMaybes $ forM [1..n] $ \_ -> tryReadTChan q
 
 -- in Control.Concurrent.STM.TChan since 2.4
 tryReadTChan :: TChan a -> STM (Maybe a)
 tryReadTChan c = do
   empty <- isEmptyTChan c
-  if empty then return Nothing else readTChan c >>= return . Just
+  if empty then return Nothing else liftM Just $ readTChan c
