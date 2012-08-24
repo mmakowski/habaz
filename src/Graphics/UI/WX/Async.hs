@@ -38,7 +38,7 @@ module Graphics.UI.WX.Async
 import Control.Concurrent.STM (atomically, STM) 
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, isEmptyTChan, readTChan, writeTChan)
 
-import Control.Monad (forM, forM_, liftM)
+import Control.Monad (forM, liftM)
 
 import Data.Maybe (catMaybes)
 
