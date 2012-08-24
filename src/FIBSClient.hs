@@ -34,6 +34,7 @@ module FIBSClient(
   LoginStatus (..),
   AccountCreationStatus (..),
   ParseResult (..),
+  MatchLength (..),
   -- * Functions
   connect,
   disconnect,

@@ -1,19 +1,21 @@
 {-|
 A model of Backgammon game.
 -}
-module Backgammon( 
+module Backgammon 
+  ( 
   -- * Types
-  Board,
-  Peg,
-  Player (..),
+    Board
+  , Peg
+  , Player (..)
+  , MatchLength (..)
   -- ** Field accessors
-  pegs,
-  count,
-  owner,
-  (!),
+  , pegs
+  , count
+  , owner
+  , (!)
   -- * Constants
-  initialBoard
-) where
+  , initialBoard
+  ) where
 import Data.Array
 import qualified Data.Map as Map
 
@@ -34,6 +36,11 @@ data Board
      = Board { pegs :: Array Int Peg, bar :: Map.Map Player Int, home :: Map.Map Player Int }
      deriving (Eq, Show)
               
+data MatchLength
+     = NoOfPoints Int
+     | UnlimitedMatchLength
+     deriving (Eq, Show)
+
 empty :: Peg
 empty = Peg Nothing 0
 

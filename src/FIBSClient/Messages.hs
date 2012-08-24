@@ -5,9 +5,9 @@ changes to make it more practical to represent the stream of messages as a list.
 -}
 module FIBSClient.Messages( 
   -- * Types
-  FIBSMessage(..),
-  MatchLength(..),
-  ParseResult(..),
+  FIBSMessage (..),
+  MatchLength (..),
+  ParseResult (..),
   RedoubleLimit (..),
   -- * Functions
   -- ** Parsing
@@ -32,14 +32,11 @@ import Data.Time
 import System.Locale
 import Text.Regex.TDFA ((=~))
 
+import Backgammon
+
 data RedoubleLimit
      = LimitedTo Int
      | Unlimited
-     deriving (Eq, Show)
-
-data MatchLength
-     = NoOfPoints Int
-     | UnlimitedMatchLength
      deriving (Eq, Show)
 
 data FIBSMessage 

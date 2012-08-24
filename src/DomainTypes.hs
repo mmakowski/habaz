@@ -2,7 +2,8 @@
 This module defines types that are not part of the Backgammon game but that represented
 data passed between different modules of the system.
 -}
-module DomainTypes ( PlayerInfo (..) )
+module DomainTypes ( PlayerInfo (..) 
+                   )
 where
 
 data PlayerInfo = PlayerInfo { name :: String
@@ -11,3 +12,5 @@ data PlayerInfo = PlayerInfo { name :: String
                              , canBeInvited :: Bool
                              }
   deriving (Show, Eq)
+
+

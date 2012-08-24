@@ -14,6 +14,7 @@ import System.Log.Logger (debugM)
 
 
 import FIBSClient
+import Backgammon
 import DomainTypes hiding (name)
 import Events (putEvent, Event, EventQueueWriter, EventConsumer (..), continue, terminate)
 import qualified Events as E (Event (..))
@@ -94,6 +95,7 @@ eventsFor (ParseFailure msg) = [E.Error msg]
 
 eventsFor' :: FIBSMessage -> [Event]
 eventsFor' ConnectionTimeOut  = [ E.Disconnected ]
+eventsFor' (Invitation n l)   = [ E.Invitation n l ]
 eventsFor' (Logout name _)    = [ E.PlayerRemoved name ]
 eventsFor' oi@(OwnInfo {})    = [ E.LoginSuccesful $ name oi
                                 , if ready oi then E.ReadyOn else E.ReadyOff
@@ -104,4 +106,3 @@ eventsFor' (System msg)       = [ E.Info msg ]
 eventsFor' (WhoInfo name opp _ ready _ rating exp _ _ _ _ _) =
                                 [ E.PlayerUpdated (PlayerInfo name rating exp $ ready && isNothing opp) ]
 eventsFor' _                  = []
-

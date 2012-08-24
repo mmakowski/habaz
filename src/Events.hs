@@ -20,12 +20,14 @@ import Control.Concurrent.STM.TChan (TChan, newTChanIO, writeTChan, readTChan)
 -- logging
 import System.Log.Logger (debugM)
 
+import Backgammon
 import DomainTypes
 
 data Event = AddEventConsumer String EventConsumer
            | Disconnected
            | Error String
            | Info String
+           | Invitation String MatchLength
            | InviteRequest String String
            | LoginFailed String
            | LoginRequest String String
