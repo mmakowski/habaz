@@ -22,6 +22,7 @@ import Backgammon
 import Events
 import DomainTypes 
 -- other view modules
+import View.InvitationList
 import View.PlayerList
 -- player map
 import Data.Map (Map)
@@ -59,13 +60,7 @@ createView q = do
   (menuBar, menuRepr) <- createMenuBar
   s <- splitterWindow p []
   playerList <- createPlayerList s
-  -- TODO: move to separate module
-  invitationList <- listCtrl s [ columns := [ ("Name", AlignLeft, 120)
-                                            , ("Rating", AlignLeft, 70)
-                                            , ("Experience", AlignLeft, 70)
-                                            , ("Match Length", AlignLeft, 100)
-                                            ]
-                               ]
+  invitationList <- createInvitationList s
   set f [ WX.menuBar := menuBar
         , layout := minsize (sz startWidth startHeight) $ container p $
                     fill $ hsplit s 5 200 (widget playerList)
