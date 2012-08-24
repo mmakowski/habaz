@@ -71,7 +71,7 @@ createView q = do
                     fill $ hsplit s 5 200 (widget playerList)
                                           (widget invitationList)
         ]
-  updateQueue <- mkUpdateQueue f
+  updateQueue <- newUpdateQueue f
   let view = View updateQueue f menuRepr playerList invitationList
   setHandlers view q
   return view
