@@ -11,6 +11,10 @@ import Test.QuickCheck
 import Model
 import Events
 
+allModelTests :: [Test]
+allModelTests = []
+
+{-
 instance Arbitrary Session where
   arbitrary = oneof [ return disconnectedSession
                     , liftM loggedInSession arbitrary
@@ -36,7 +40,6 @@ sessionStateTransitions = testGroup "Session state manipulation" [
 name :: String
 name = "some name"
 
-{-
 import FIBSClientTests -- arbitrary instance for ParseResults
 
 type DummyConn = ()

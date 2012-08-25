@@ -24,9 +24,6 @@ import DomainTypes
 -- other view modules
 import View.InvitationList
 import View.PlayerList
--- player map
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 -- | All view elements that need to be acessed by Controller.
 data View = View { updateQueue :: UpdateQueue
@@ -230,12 +227,11 @@ requestInvitation q name len = putEvent q $ InviteRequest name len
 
 promptForMatchLength :: Frame () -> String -> IO (Maybe String)
 promptForMatchLength w name = do
-  d <- dialog w [ text := "Log In" ]
+  d <- dialog w [ text := "Invitation" ]
   matchLengthInput <- textEntry d [ text := "3" ]
   ok <- button d [ text := "&Yes" ]
   cancel <- button d [ text := "&No" ]
-  set d [ layout := margin 10 $ column 5 [ row 5 [ label $ "Invite " ++ name]
-                                         , grid 5 5 [[ label $ "Invite " ++ name ++ " to"
+  set d [ layout := margin 10 $ column 5 [ grid 5 5 [[ label $ "Invite " ++ name ++ " to"
                                                      , widget matchLengthInput
                                                      , label "point match?"
                                                      ]]

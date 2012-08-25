@@ -1,25 +1,67 @@
 {-|
-This module contains data types and functions modeling the state of FIBS session. There are the following
-levels of state:
-
-1. /Session/: the topmost level, represents the state of entire application. Contains data such as the 
-list of erros, the connection (when connected), list of players (when connected) and match state (when playing).
-
-2. /Match/: current match score, player ids, game state (if game is in progress)
-
-3. /Game/: the board, who has the dice etc.
-
+This module contains data types and functions modeling the state of the application.
 -}
-module Model ( Session
-             , (<|)
-             , initialSession
-             , disconnectedSession
-             , loggedInSession
-             , readySession
+module Model ( State
+             , newInitialState
+             , stateUpdater
+             , playerInfo
              ) 
 where
+
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.TVar (TVar, newTVarIO, readTVar, writeTVar)
+
+import Control.Monad (liftM)
+
+import qualified Data.Map as Map (Map, empty, insert, lookup)
+
+import Backgammon
+import DomainTypes
 import Events hiding (Disconnected)
 import qualified Events as E (Event (Disconnected))
+
+-- | State of the application (mutable)
+newtype State = State (TVar StateData)
+
+data StateData = StateData { sdPlayerInfo :: Map.Map String PlayerInfo 
+                           }
+
+-- | Creates a new initial state 
+newInitialState :: IO State
+newInitialState = liftM State $ newTVarIO initialStateData
+
+initialStateData :: StateData
+initialStateData = StateData { sdPlayerInfo = Map.empty }
+
+-- | An event consumer that updates that state in response to events
+stateUpdater :: State          -- ^ the state to update
+             -> EventConsumer  -- ^ consumer that updates state in response to events
+stateUpdater s = EventConsumer $ \e -> do
+  updateState e s
+  continue $ stateUpdater s
+
+updateState :: Event -> State -> IO ()
+updateState e (State tvsd) = atomically $ do
+  sd <- readTVar tvsd
+  writeTVar tvsd $ updateStateData e sd
+
+updateStateData :: Event -> StateData -> StateData
+updateStateData e sd = case e of 
+  (PlayerUpdated pinfo) -> sd { sdPlayerInfo = Map.insert (name pinfo) pinfo $ sdPlayerInfo sd }
+  _                     -> sd
+
+-- | Yields the player info for player with supplied name
+playerInfo :: State                 -- ^ the state
+           -> String                -- ^ player name
+           -> IO (Maybe PlayerInfo) -- ^ @Just@ player info, or @Nothing@ if no such player exists
+playerInfo s n = do 
+  pis <- extract sdPlayerInfo s
+  return $ Map.lookup n pis
+
+extract :: (StateData -> a) -> State -> IO a
+extract e (State tvsd) = atomically $ liftM e $ readTVar tvsd
+
+{-
 
 -- | State of a state machine; a is the type of state data and b is the type of event
 -- that triggers state transition. A state is a pair of data and a transition function.
@@ -76,8 +118,6 @@ data SessionData
      | Ready String
      -- TODO: more states
   deriving (Eq, Show)
-
-{-
 
 data StateDataF
      -- | Client is disconnected from the server
