@@ -21,7 +21,7 @@ main = start $ do
   (qreader, qwriter) <- newEventQueue
   state <- newInitialState
   consumers <- sequence [ return $ stateUpdater state
-                        , viewConsumer qwriter
+                        , viewConsumer qwriter state
                         , return $ fibsConnector qwriter
                         ]
   forkIO $ dispatchEvents consumers qreader

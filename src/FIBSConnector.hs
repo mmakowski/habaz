@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-
 Module responsible for interfacing between the event queue and FIBS client
 -}
@@ -97,12 +98,12 @@ eventsFor' :: FIBSMessage -> [Event]
 eventsFor' ConnectionTimeOut  = [ E.Disconnected ]
 eventsFor' (Invitation n l)   = [ E.Invitation n l ]
 eventsFor' (Logout name _)    = [ E.PlayerRemoved name ]
-eventsFor' oi@(OwnInfo {})    = [ E.LoginSuccesful $ name oi
-                                , if ready oi then E.ReadyOn else E.ReadyOff
+eventsFor' (OwnInfo {..})     = [ E.LoginSuccesful $ name
+                                , if ready then E.ReadyOn else E.ReadyOff
+                                , E.PlayerUpdated $ PlayerInfo name rating experience ready
                                 ]
 eventsFor' ReadyOn            = [ E.ReadyOn ]
 eventsFor' ReadyOff           = [ E.ReadyOff ]
 eventsFor' (System msg)       = [ E.Info msg ]
-eventsFor' (WhoInfo name opp _ ready _ rating exp _ _ _ _ _) =
-                                [ E.PlayerUpdated (PlayerInfo name rating exp $ ready && isNothing opp) ]
+eventsFor' (WhoInfo {..})     = [ E.PlayerUpdated $ PlayerInfo name rating experience (ready && isNothing opponent) ]
 eventsFor' _                  = []

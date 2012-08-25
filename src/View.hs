@@ -16,11 +16,15 @@ import Graphics.UI.WX.Async
 -- control structures
 import qualified Data.Traversable as DT (sequence)
 import Control.Monad (when)
--- Model
+-- logging
+import System.Log.Logger (errorM)
+
+-- connectivity with the rest of the app
 import Model
 import Backgammon
 import Events
 import DomainTypes 
+
 -- other view modules
 import View.InvitationList
 import View.PlayerList
@@ -41,10 +45,10 @@ data SessionMenu = SessionMenu { logInItem :: MenuItem ()
                                , matchPane :: WX.Menu ()
                                }
 
-viewConsumer :: EventQueueWriter -> IO EventConsumer
-viewConsumer q = do
-  v <- createView q
-  viewConsumer' v q
+viewConsumer :: EventQueueWriter -> State -> IO EventConsumer
+viewConsumer q s = do
+  v <- createView q 
+  viewConsumer' v q s
 
 startWidth, startHeight :: Int
 startWidth = 200
@@ -90,16 +94,17 @@ createMenuBar = do
           SessionMenu logIn logOut ready exit match)
 
 
-viewConsumer' :: View -> EventQueueWriter -> IO EventConsumer
-viewConsumer' v q = return $ EventConsumer $ \e -> do
-  postGUIAsync (updateQueue v) $ processEvent e q v
-  DT.sequence $ Just $ viewConsumer' v q
+viewConsumer' :: View -> EventQueueWriter -> State -> IO EventConsumer
+viewConsumer' v q s = return $ EventConsumer $ \e -> do
+  postGUIAsync (updateQueue v) $ processEvent e q s v
+  DT.sequence $ Just $ viewConsumer' v q s
 
-processEvent :: Event -> EventQueueWriter -> View -> IO ()
-processEvent e q = case e of
+processEvent :: Event -> EventQueueWriter -> State -> View -> IO ()
+processEvent e q s = case e of
   Disconnected        -> disconnected
   Error msg           -> showErrorMessage msg
   Info msg            -> showInfoMessage msg
+  Invitation n l      -> receivedInvitation n l s
   LoginSuccesful _    -> loginSuccesful
   PlayerRemoved n     -> playerRemoved n
   PlayerUpdated pi    -> playerUpdated pi
@@ -109,6 +114,13 @@ processEvent e q = case e of
 
 disconnected :: View -> IO ()
 disconnected v = loginRelatedControlsEnabled v True
+
+receivedInvitation :: String -> MatchLength -> State -> View -> IO ()
+receivedInvitation name len s v = do
+  mpinfo <- playerInfo s name
+  case mpinfo of
+    Just pinfo -> addInvitation (invitationList v) pinfo len
+    Nothing    -> errorM "Habaź.view" $ "received invitation from " ++ name ++ " but no such player could be found in state"
 
 loginSuccesful :: View -> IO ()
 loginSuccesful v = loginRelatedControlsEnabled v False
@@ -167,7 +179,7 @@ requestLogin q v user pass = do
 loginResultConsumer :: EventQueueWriter -> View -> String -> String -> EventConsumer
 loginResultConsumer q v user pass = EventConsumer $ \e -> case e of
   LoginSuccesful _ -> terminal $ return ()
-  LoginFailed msg  -> terminal $ promptForRegistration msg q v user pass
+  LoginFailed msg  -> terminal $ postGUIAsync (updateQueue v) $ promptForRegistration msg q v user pass
   _                -> continue $ loginResultConsumer q v user pass
   where terminal op = do { op; terminate "loginResultConsumer" }
 
@@ -185,8 +197,8 @@ requestRegistration q v user pass = do
   
 registrationResultConsumer :: EventQueueWriter -> View -> String -> String -> EventConsumer
 registrationResultConsumer q v user pass = EventConsumer $ \e -> case e of
-  RegistrationSuccesful  -> terminal $ logInAfterRegistration q v user pass
-  RegistrationFailed msg -> terminal $ showErrorMessage ("Registration failed: \"" ++ msg ++ "\".") v
+  RegistrationSuccesful  -> terminal $ postGUIAsync (updateQueue v) $ logInAfterRegistration q v user pass
+  RegistrationFailed msg -> terminal $ postGUIAsync (updateQueue v) $ showErrorMessage ("Registration failed: \"" ++ msg ++ "\".") v
   _                      -> continue $ registrationResultConsumer q v user pass
   where terminal op = do { op; terminate "registrationResultConsumer" }
 
