@@ -32,7 +32,9 @@ executable habaz
                   FIBSConnector,
                   Model,
                   View,
+                  View.Board,
                   View.InvitationList,
+                  View.MatchWindow,
                   View.PlayerList,
                   Graphics.UI.WX.Async
   ghc-options:    -rtsopts -threaded -O2
