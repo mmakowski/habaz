@@ -43,48 +43,55 @@ import Control.Monad (forM, liftM)
 import Data.Maybe (catMaybes)
 
 import Graphics.UI.WX
+import Graphics.UI.WXCore
 
 -- | They type of queue that delivers updates to the UI thread.
-type UpdateQueue = TChan (IO ())
+data UpdateQueue = UpdateQueue { uqHandler :: Frame ()
+                               , uqQueue   :: TChan (IO ())
+                               , uqConfig  :: AsyncConfig
+                               }
 
 -- | The configuration of the asynchronous processor.
-data AsyncConfig = AsyncConfig { pollIntervalMs :: Int -- ^ the period between checks if there are any updates on the queue
-                               , batchSize      :: Int -- ^ the maximum number of updates applied during single poll
+data AsyncConfig = AsyncConfig { eventId   :: Int -- ^ the id of event used to signal that an async update has been posted
+                               , batchSize :: Int -- ^ the maximum number of updates applied during single queue poll
                                }
 
 -- | The default configuraion of a new update queue.
 defaultConfig :: AsyncConfig
-defaultConfig = AsyncConfig { pollIntervalMs = 10
-                            , batchSize      = 100
+defaultConfig = AsyncConfig { eventId   = wxID_HIGHEST + 51
+                            , batchSize = 100
                             }
 
 -- | Yields a new update queue using 'defaultConfig'.
-newUpdateQueue :: Window a       -- ^ a window of the application; when deleted, the queue will become defunct
+newUpdateQueue :: Frame ()       -- ^ a window of the application; when deleted, the queue will become defunct
                -> IO UpdateQueue -- ^ a new update queue attached to supplied window
 newUpdateQueue = newUpdateQueueWithConfig defaultConfig
 
 -- | Yields a new update queue with specified config.
 newUpdateQueueWithConfig :: AsyncConfig    -- ^ queue configuration
-                         -> Window a       -- ^ a window of the application; when deleted, the queue will become defunct
+                         -> Frame ()       -- ^ a window of the application; when deleted, the queue will become defunct
                          -> IO UpdateQueue -- ^ a new update queue attached to supplied window
 newUpdateQueueWithConfig cfg f = do
   q <- newTChanIO
-  timer f [ interval   := pollIntervalMs cfg
-          , on command := processUiUpdates (batchSize cfg) q
-          ]
-  return q
+  evtHandlerOnMenuCommand f (eventId cfg) $ processUiUpdates (batchSize cfg) q
+  return $ UpdateQueue f q cfg
 
 -- | Posts an UI update onto specified 'UpdateQueue'.
 postGUIAsync :: UpdateQueue -- ^ the queue to post the update to
-             -> IO a        -- ^ the update to post
+             -> IO b        -- ^ the update to post
              -> IO ()
-postGUIAsync q u = atomically $ writeTChan q $ do u; return ()
+postGUIAsync q u = do
+  atomically $ writeTChan (uqQueue q) $ do u; return ()
+  mkEvent (eventId $ uqConfig q) >>= evtHandlerAddPendingEvent (uqHandler q)
 
-processUiUpdates :: Int -> UpdateQueue -> IO ()
+processUiUpdates :: Int -> TChan (IO ()) -> IO ()
 processUiUpdates n q = atomically (tryTake n q) >>= sequence_
 
 tryTake :: Int -> TChan a -> STM [a]
 tryTake n q = liftM catMaybes $ forM [1..n] $ \_ -> tryReadTChan q
+
+mkEvent :: Id -> IO (CommandEvent ())
+mkEvent eventId = commandEventCreate wxEVT_COMMAND_MENU_SELECTED eventId
 
 -- in Control.Concurrent.STM.TChan since 2.4
 tryReadTChan :: TChan a -> STM (Maybe a)
