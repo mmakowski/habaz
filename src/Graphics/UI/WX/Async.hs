@@ -5,8 +5,8 @@ License   : MIT
 
 Asynchronous processing for wxHaskell. wxWidgets requires that all UI updates are invoked from
 the same thread; this library provides a way of initiating the updates from arbitrary threads.
-It is done by posting the UI update IO actions onto a transactional queue which is periodically
-checked by the thread that runs the main UI loop.
+It is done by posting the UI update IO actions onto a transactional queue and notifying the main UI
+loop by means of WX event that an update is available.
 
 Example usage:
 
@@ -18,8 +18,8 @@ Example usage:
 >-- now we can update the UI from another thread:
 >asyncUIUpdate = postGUIAsync q $ set f [ text := "End" ]
 
-There is normally no reasaon to create more than one update queue per application.
-
+There is normally no reasaon to create more than one update queue per application. If you choose to
+do so, you'll need to ensure that a different event id is used for each of the queues.
 -}
 module Graphics.UI.WX.Async 
   (
