@@ -17,43 +17,49 @@ import System.Log.Logger
 
 -- wx
 import Graphics.UI.WX hiding (Event)
-
+import Graphics.UI.WXCore hiding (Event)
 
 -- gtk
 --import Graphics.UI.Gtk
 
 -- Graphics.UI.WX.Async
 
-type UpdateQueue = TQueue (IO ())
+data UpdateQueue a = UpdateQueue { uqHandler :: Frame a
+                                 , uqQueue   :: TQueue (IO ())
+                                 , uqConfig  :: AsyncConfig
+                                 }
 
-data AsyncConfig = AsyncConfig { pollIntervalMs :: Int
-                               , batchSize      :: Int
+data AsyncConfig = AsyncConfig { eventId   :: Id
+                               , batchSize :: Int
                                }
 
 defaultConfig :: AsyncConfig
-defaultConfig = AsyncConfig { pollIntervalMs = 10
-                            , batchSize      = 100
+defaultConfig = AsyncConfig { eventId   = wxID_HIGHEST + 51
+                            , batchSize = 100
                             }
 
-mkUpdateQueue :: Frame a -> IO UpdateQueue
+mkUpdateQueue :: Frame a -> IO (UpdateQueue a)
 mkUpdateQueue = mkUpdateQueueWithConfig defaultConfig
 
-mkUpdateQueueWithConfig :: AsyncConfig -> Frame a -> IO UpdateQueue
+mkUpdateQueueWithConfig :: AsyncConfig -> Frame a -> IO (UpdateQueue a)
 mkUpdateQueueWithConfig cfg f = do
   q <- newTQueueIO
-  timer f [ interval   := pollIntervalMs cfg
-          , on command := processUiUpdates (batchSize cfg) q
-          ]
-  return q
+  evtHandlerOnMenuCommand f (eventId cfg) $ processUiUpdates (batchSize cfg) q
+  return $ UpdateQueue f q cfg
 
-processUiUpdates :: Int -> UpdateQueue -> IO ()
+processUiUpdates :: Int -> TQueue (IO ()) -> IO ()
 processUiUpdates n q = atomically (tryTake n q) >>= sequence_
 
 tryTake :: Int -> TQueue a -> STM [a]
 tryTake n q = forM [1..n] (\_ -> tryReadTQueue q) >>= return . catMaybes
 
-postGUIAsync :: UpdateQueue -> IO a -> IO ()
-postGUIAsync q u = atomically $ writeTQueue q $ do u; return ()
+postGUIAsync :: UpdateQueue a -> IO b -> IO ()
+postGUIAsync q u = do 
+  atomically $ writeTQueue (uqQueue q) $ do u; return ()
+  mkEvent (eventId $ uqConfig q) >>= evtHandlerAddPendingEvent (uqHandler q)
+
+mkEvent :: Id -> IO (CommandEvent ())
+mkEvent eventId = commandEventCreate wxEVT_COMMAND_MENU_SELECTED eventId
 
 -- Events ---------------------------------------------------------------------------
 
